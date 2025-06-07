@@ -2,7 +2,7 @@ const express = require('express');
 const authController = require('../controllers/authController');
 const path = require('path');
 const User = require('../models/userModel');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const { 
     authenticate, 
     verifyAdmin, 
