@@ -28,20 +28,21 @@ interface WaitlistEntry {
   interest: string;
   createdAt: string;
 }
-
-// ─── PICK API BASED ON ENVIRONMENT ─────────────────────────────────────────────
 const API_BASE =
   process.env.NODE_ENV === "production"
     ? "https://circlemate-spark-landing-jet.vercel.app"
     : "http://localhost:3000";
 
+// Fetch wrapper: throw server-sent message if available
 const fetchWaitlist = async (): Promise<WaitlistEntry[]> => {
-  const res = await fetch(`${API_BASE}/api/waitlist`);
-  const wrapper = await res.json(); // { status, data: WaitlistEntry[], pagination, stats }
-  if (!res.ok) throw new Error("Failed to fetch waitlist");
-  return wrapper.data;              // return only the array
+  const res = await fetch(`${API_BASE}/api/v1/waitlist`);
+  const wrapper = await res.json();
+  if (!res.ok) {
+    const msg = wrapper.message || wrapper.error || "Failed to fetch waitlist";
+    throw new Error(msg);
+  }
+  return wrapper.data;
 };
-// ────────────────────────────────────────────────────────────────────────────────
 
 const ADMIN_PASSCODE = "3820"; // You can change this or store in env
 
