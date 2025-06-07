@@ -23,7 +23,7 @@
   "author": "Olumade Temitayo",
   "license": "ISC",
   "dependencies": {
-    "bcryptjs": "^2.4.3",
+    "bcrypt": "^6.0.0",
     "cloudinary": "^1.41.0",
     "compression": "^1.7.4",
     "connect-mongo": "^5.1.0",

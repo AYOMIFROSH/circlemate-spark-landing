@@ -10,7 +10,6 @@ const compression = require('compression');
 const morgan = require('morgan');
 
 const authRouter = require('./routes/authRoutes');
-const authController = require('./controllers/authController');
 const { verifiedPage } = require('./controllers/authController');
 const { securityHeaders, requestLogger } = require('./routes/middleware');
 const logger = require('./utils/logger');
@@ -18,8 +17,6 @@ const onboardingRouter = require('./routes/onboardingRoutes');
 const waitlistRouter = require('./routes/waitListRoutes');
 const importCsvRouter = require("./models/importCsv");
 
-
-const createError = require('./utils/appError');
 
 const app = express();
 require('dotenv').config();
