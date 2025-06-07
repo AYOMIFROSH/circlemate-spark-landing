@@ -69,7 +69,7 @@ const NEXT_PUBLIC_API_URL =
     setApiError('');
 
     try {
-      const response = await fetch(`${NEXT_PUBLIC_API_URL}/api/v1/waitlist/submit`, {
+      const response = await fetch(`${NEXT_PUBLIC_API_URL}/api/waitlist/submit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
