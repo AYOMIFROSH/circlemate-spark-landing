@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -5,27 +6,49 @@ const path = require('path');
 const mongoSanitize = require('express-mongo-sanitize');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const morgan = require('morgan');
 
+// Import configurations
+const { connectDB, disconnectDB } = require('./config/database');
+const redis = require('./utils/redis');
+
+// Import routes
 const authRouter = require('./routes/authRoutes');
-const authController = require('./controllers/authController');
-const { verifiedPage } = require('./controllers/authController');
-const { securityHeaders, requestLogger } = require('./routes/middleware');
-const logger = require('./utils/logger');
 const onboardingRouter = require('./routes/onboardingRoutes');
 const waitlistRouter = require('./routes/waitListRoutes');
 const importCsvRouter = require("./models/importCsv");
 
+// Import middleware
+const {
+    defaultMiddleware,
+    corsOptions,
+    compressionOptions,
+    apiRateLimit,
+    maintenanceMode,
+    formatErrorResponse,
+    apiVersion,
+    timeout,
+    cache
+} = require('./routes/middleware');
 
-const createError = require('./utils/appError');
+// Import controllers
+const { verifiedPage } = require('./controllers/authController');
+
+// Import utilities
+const logger = require('./utils/logger');
 
 const app = express();
-require('dotenv').config();
 
 // Validate environment variables
-const requiredEnvVars = ['DB_ALT_HOST', 'SESSION_SECRET', 'SECRET_KEY', 'AUTH_EMAIL', 'AUTH_PASSWORD'];
+const requiredEnvVars = [
+    'DB_ALT_HOST', 
+    'SESSION_SECRET', 
+    'SECRET_KEY', 
+    'AUTH_EMAIL', 
+    'AUTH_PASSWORD',
+    'REDIS_HOST'
+];
 const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingEnvVars.length > 0) {
@@ -33,22 +56,31 @@ if (missingEnvVars.length > 0) {
     process.exit(1);
 }
 
-const dbAltHost = process.env.DB_ALT_HOST;
-const SESSION_SECRET = process.env.SESSION_SECRET;
+// Trust proxy (important for rate limiting and IP detection)
+app.set('trust proxy', 1);
 
-// Compression middleware
-app.use(compression());
+// View engine setup
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
-// Security middleware
+// ===== MIDDLEWARE SETUP (Order matters!) =====
+
+// 1. Maintenance mode check (first)
+app.use(maintenanceMode);
+
+// 2. Default security and logging middleware
+app.use(defaultMiddleware);
+
+// 3. Helmet security headers
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdnjs.cloudflare.com"],
             imgSrc: ["'self'", "data:", "https:"],
             connectSrc: ["'self'"],
-            fontSrc: ["'self'", "https:", "data:"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
             objectSrc: ["'none'"],
             mediaSrc: ["'self'"],
             frameSrc: ["'self'"],
@@ -57,109 +89,62 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
-// Custom security headers
-app.use(securityHeaders);
-
-// Request logging
-app.use(morgan('combined', { stream: logger.stream }));
-app.use(requestLogger);
-
-// Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
-    message: {
-        status: 'FAILED',
-        message: 'Too many requests from this IP, please try again later.'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-    handler: (req, res) => {
-        logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
-        res.status(429).json({
-            status: 'FAILED',
-            message: 'Too many requests from this IP, please try again later.'
-        });
-    }
-});
-
-app.use(limiter);
-
-// Stricter rate limiting for auth endpoints
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // Limit each IP to 20 requests per windowMs for auth endpoints
-    message: {
-        status: 'FAILED',
-        message: 'Too many authentication attempts, please try again later.'
-    },
-    skipSuccessfulRequests: true, // Don't count successful requests
-});
-
-// CORS configuration
-const corsOptions = {
-    origin: function (origin, callback) {
-        const allowedOrigins = [
-            'http://localhost:8080',
-            'https://circlemate-spark-landing-mbh1.vercel.app',
-            'https://www.mycirclemate.com',
-            'http://localhost:3000',
-            process.env.FRONTEND_URL
-        ].filter(Boolean);
-        
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-        
-        if (allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            logger.warn(`CORS blocked request from origin: ${origin}`);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With'],
-    credentials: true,
-    maxAge: 86400, // 24 hours
-    optionsSuccessStatus: 200
-};
-
+// 4. CORS configuration
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
-// Trust proxy (important for rate limiting and IP detection)
-app.set('trust proxy', 1);
+// 5. Compression
+app.use(compression(compressionOptions));
 
-// Body parsing middleware with size limits
+// 6. Request logging with Morgan
+app.use(morgan('combined', { 
+    stream: { 
+        write: message => logger.info(message.trim()) 
+    },
+    skip: (req, res) => res.statusCode < 400 // Only log errors in production
+}));
+
+// 7. Body parsing with size limits
+app.use(express.json({ 
+    limit: '10mb',
+    verify: (req, res, buf, encoding) => {
+        // Save raw body for webhook signature verification if needed
+        if (req.headers['x-webhook-signature']) {
+            req.rawBody = buf.toString(encoding || 'utf8');
+        }
+    }
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-app.use(express.json({ limit: '10mb' }));
 
-// Cookie parsing middleware
+// 8. Cookie parsing
 app.use(cookieParser());
 
-// MongoDB sanitization
-app.use(
-    mongoSanitize({
-        onSanitize: ({ req, key }) => {
-            logger.warn(`Potentially malicious key detected: ${key} from IP: ${req.ip}`);
-        },
-    })
-);
+// 9. MongoDB sanitization
+app.use(mongoSanitize({
+    replaceWith: '_',
+    onSanitize: ({ req, key }) => {
+        logger.warn(`Potentially malicious key detected: ${key} from IP: ${req.ip}`);
+    },
+}));
 
-// Health check route
-app.get('/', (req, res) => {
+// 10. Global timeout (30 seconds for all requests)
+app.use(timeout(30));
+
+// 11. API rate limiting
+app.use('/api/', apiRateLimit);
+
+// ===== ROUTES =====
+
+// Health check endpoints (no auth required)
+app.get('/', cache(60), (req, res) => {
     res.status(200).json({
         status: 'success',
-        message: 'API is running',
+        message: 'CircleMate API is running',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development',
         version: process.env.API_VERSION || '1.0.0'
     });
 });
-
-// View engine setup
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
 
 // Detailed health check
 app.get('/health', async (req, res) => {
@@ -170,6 +155,7 @@ app.get('/health', async (req, res) => {
         environment: process.env.NODE_ENV || 'development',
         checks: {
             database: 'pending',
+            redis: 'pending',
             memory: process.memoryUsage(),
         }
     };
@@ -178,152 +164,174 @@ app.get('/health', async (req, res) => {
         // Check database connection
         await mongoose.connection.db.admin().ping();
         healthcheck.checks.database = 'connected';
+        
+        // Check Redis connection
+        await redis.set('health:check', 'ok');
+        const redisCheck = await redis.get('health:check');
+        healthcheck.checks.redis = redisCheck === 'ok' ? 'connected' : 'error';
+        
+        // Check memory usage
+        const memUsage = process.memoryUsage();
+        healthcheck.checks.memoryUsagePercent = Math.round((memUsage.heapUsed / memUsage.heapTotal) * 100);
+        
         res.status(200).json(healthcheck);
     } catch (error) {
         healthcheck.checks.database = 'disconnected';
+        healthcheck.checks.redis = 'disconnected';
         healthcheck.message = 'Service degraded';
         res.status(503).json(healthcheck);
     }
 });
 
+// Readiness check for Kubernetes/load balancers
+app.get('/readiness', async (req, res) => {
+    try {
+        // Check if database is ready
+        const dbState = mongoose.connection.readyState;
+        if (dbState !== 1) {
+            throw new Error('Database not ready');
+        }
+        
+        // Check if Redis is ready
+        await redis.get('readiness:check');
+        
+        res.status(200).json({ status: 'ready' });
+    } catch (error) {
+        res.status(503).json({ status: 'not ready', error: error.message });
+    }
+});
 
 // Email verification success page
 app.get('/api/verified', verifiedPage);
 
-// Apply auth rate limiting to auth routes
-app.use('/api/auth', authLimiter);
+// API v1 routes with versioning
+app.use('/api/v1', apiVersion('1.0.0'));
 
-app.use("/api", importCsvRouter); 
+// Import route with CSV functionality
+app.use("/api/v1", importCsvRouter);
 
-// Main routes
-app.use('/api/auth', authRouter);
+// Auth routes with specific rate limiting
+app.use('/api/v1/auth', authRouter);
 
-app.use('/api/waitlist', waitlistRouter);
+// Waitlist routes (public)
+app.use('/api/v1/waitlist', waitlistRouter);
 
-app.use('/api/onboarding', onboardingRouter);
+// Onboarding routes (authenticated)
+app.use('/api/v1/onboarding', onboardingRouter);
 
-// API documentation route (placeholder)
-app.get('/api/docs', (req, res) => {
+// API documentation
+app.get('/api/v1/docs', cache(3600), (req, res) => {
     res.json({
         status: 'success',
-        message: 'API documentation will be available here',
+        message: 'CircleMate API Documentation',
+        version: '1.0.0',
         endpoints: {
             auth: {
-                signup: 'POST /api/auth/signup',
-                login: 'POST /api/auth/login',
-                logout: 'POST /api/auth/logout',
-                verify: 'GET /api/auth/verify/:userId/:uniqueString',
-                forgotPassword: 'POST /api/auth/forgotpassword',
-                resetPassword: 'POST /api/auth/reset-password/:token',
-                me: 'GET /api/auth/me',
-                sessions: 'GET /api/auth/sessions',
-                refreshToken: 'POST /api/auth/refresh'
+                signup: 'POST /api/v1/auth/signup',
+                login: 'POST /api/v1/auth/login',
+                logout: 'POST /api/v1/auth/logout',
+                verify: 'GET /api/v1/auth/verify/:userId/:uniqueString',
+                forgotPassword: 'POST /api/v1/auth/forgotpassword',
+                resetPassword: 'POST /api/v1/auth/reset-password/:token',
+                me: 'GET /api/v1/auth/me',
+                sessions: 'GET /api/v1/auth/sessions',
+                refreshToken: 'POST /api/v1/auth/refresh'
+            },
+            waitlist: {
+                submit: 'POST /api/v1/waitlist/submit',
+                list: 'GET /api/v1/waitlist (admin)',
+                export: 'GET /api/v1/waitlist/export (admin)',
+                stats: 'GET /api/v1/waitlist/stats (admin)'
+            },
+            onboarding: {
+                status: 'GET /api/v1/onboarding/status',
+                community: 'POST /api/v1/onboarding/community',
+                profile: 'POST /api/v1/onboarding/profile',
+                location: 'POST /api/v1/onboarding/location',
+                personality: 'POST /api/v1/onboarding/personality',
+                preferences: 'POST /api/v1/onboarding/preferences',
+                availability: 'POST /api/v1/onboarding/availability',
+                photos: 'POST /api/v1/onboarding/photos',
+                complete: 'POST /api/v1/onboarding/complete'
             }
+        },
+        rateLimit: {
+            general: '1000 requests per 15 minutes',
+            auth: '20 requests per 15 minutes',
+            login: '5 requests per 15 minutes'
         }
     });
 });
 
+// Metrics endpoint (internal use only)
+app.get('/api/v1/metrics', async (req, res, next) => {
+    try {
+        // Simple API key authentication for metrics
+        const apiKey = req.headers['x-api-key'];
+        if (apiKey !== process.env.METRICS_API_KEY) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        
+        // Get metrics from Redis
+        const requests = await redis.lrange('metrics:requests', 0, 99);
+        const stats = await redis.getStats();
+        
+        res.json({
+            timestamp: new Date().toISOString(),
+            process: {
+                uptime: process.uptime(),
+                memory: process.memoryUsage(),
+                cpu: process.cpuUsage()
+            },
+            requests: requests.map(r => JSON.parse(r)),
+            redis: stats
+        });
+    } catch (error) {
+        next(error);
+    }
+});
 
-// Static files
-app.use('/assets', express.static(path.join(__dirname, '..', 'assets')));
+// Static files with caching
+app.use('/assets', express.static(path.join(__dirname, '..', 'assets'), {
+    maxAge: '7d',
+    etag: true,
+    lastModified: true
+}));
 
-// Support both favicon.ico and favicon.png requests
+// Favicon handling
 app.get('/favicon.ico', (req, res) => {
-    res.redirect('/favicon.png');
+    res.redirect(301, '/favicon.png');
 });
 
 app.get('/favicon.png', (req, res) => {
     res.sendFile(path.join(__dirname, 'assets', 'icon.png'), {
         headers: {
             'Content-Type': 'image/png',
-            'Cache-Control': 'public, max-age=604800'
+            'Cache-Control': 'public, max-age=604800' // 7 days
         }
     });
 });
 
 // 404 handler
 app.use('*', (req, res) => {
-    logger.warn(`404 - Route not found: ${req.originalUrl}`);
+    logger.warn(`404 - Route not found: ${req.originalUrl} from IP: ${req.ip}`);
     res.status(404).json({
         status: 'FAILED',
-        message: `Route ${req.originalUrl} not found`
+        message: `Route ${req.originalUrl} not found`,
+        suggestion: 'Please check the API documentation at /api/v1/docs'
     });
 });
 
 // Global error handler
-app.use((err, req, res, next) => {
+app.use(formatErrorResponse);
 
-    // Check if headers have already been sent
-    if (res.headersSent) {
-        return next(err);
-    }
-    // Set CORS headers for error responses
-    const allowedOrigins = ['https://circlemate-spark-landing-mbh1.vercel.app', 'http://localhost:8080', 'http://localhost:3000', 'https://www.mycirclemate.com'];
-    const origin = req.headers.origin;
-    if (allowedOrigins.includes(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
-    }
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-    // Log error details
-    logger.error('Error occurred:', {
-        message: err.message,
-        stack: err.stack,
-        url: req.url,
-        method: req.method,
-        ip: req.ip,
-        timestamp: new Date().toISOString()
-    });
-
-    // Don't leak error details in production
-    const isDevelopment = process.env.NODE_ENV === 'development';
-
-    // Set default error properties
-    err.statusCode = err.statusCode || 500;
-    err.status = err.status || 'error';
-
-    // MongoDB duplicate key error
-    if (err.code === 11000) {
-        const field = Object.keys(err.keyPattern)[0];
-        err.statusCode = 409;
-        err.message = `${field} already exists`;
-    }
-
-    // MongoDB validation error
-    if (err.name === 'ValidationError') {
-        err.statusCode = 400;
-        const errors = Object.values(err.errors).map(e => e.message);
-        err.message = `Validation error: ${errors.join(', ')}`;
-    }
-
-    // JWT errors
-    if (err.name === 'JsonWebTokenError') {
-        err.statusCode = 401;
-        err.message = 'Invalid token';
-    }
-
-    if (err.name === 'TokenExpiredError') {
-        err.statusCode = 401;
-        err.message = 'Token has expired';
-    }
-
-    // Send error response
-    res.status(err.statusCode).json({
-        status: err.status,
-        message: err.message,
-        ...(isDevelopment && { 
-            stack: err.stack,
-            error: err 
-        })
-    });
-});
-
-// Graceful shutdown handlers
+// ===== GRACEFUL SHUTDOWN =====
 let server;
 
 const gracefulShutdown = async (signal) => {
     logger.info(`${signal} received. Starting graceful shutdown...`);
     
+    // Stop accepting new connections
     if (server) {
         server.close(() => {
             logger.info('HTTP server closed');
@@ -331,8 +339,13 @@ const gracefulShutdown = async (signal) => {
     }
 
     try {
-        await mongoose.connection.close();
-        logger.info('MongoDB connection closed');
+        // Close database connections
+        await disconnectDB();
+        
+        // Close Redis connection
+        await redis.flushdb(); // Clear any pending operations
+        
+        logger.info('All connections closed successfully');
         process.exit(0);
     } catch (error) {
         logger.error('Error during shutdown:', error);
@@ -340,88 +353,107 @@ const gracefulShutdown = async (signal) => {
     }
 };
 
+// Handle shutdown signals
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Unhandled rejection handler
+// Handle uncaught errors
 process.on('unhandledRejection', (reason, promise) => {
     logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
-    // Don't exit the process in production
+    // Don't exit in production, just log
     if (process.env.NODE_ENV !== 'production') {
         gracefulShutdown('UNHANDLED_REJECTION');
     }
 });
 
-// Uncaught exception handler
 process.on('uncaughtException', (error) => {
     logger.error('Uncaught Exception:', error);
+    // Always exit on uncaught exceptions
     gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
 
-// Database connection and server startup
+// ===== SCHEDULED JOBS =====
+const setupScheduledJobs = () => {
+    const Session = require('./models/sessionModel');
+    const User = require('./models/userModel');
+    
+    // Session cleanup job - runs every hour
+    setInterval(async () => {
+        try {
+            const result = await Session.cleanupExpired();
+            logger.info('Expired sessions cleanup completed');
+        } catch (error) {
+            logger.error('Session cleanup error:', error);
+        }
+    }, 60 * 60 * 1000);
+
+    // Unverified accounts cleanup - runs once per day
+    setInterval(async () => {
+        try {
+            const result = await User.cleanupUnverifiedAccounts();
+            if (result.deletedCount > 0) {
+                logger.info(`Cleaned up ${result.deletedCount} unverified accounts`);
+            }
+        } catch (error) {
+            logger.error('Unverified accounts cleanup error:', error);
+        }
+    }, 24 * 60 * 60 * 1000);
+
+    // Redis metrics cleanup - runs every 6 hours
+    setInterval(async () => {
+        try {
+            // Clean old metrics
+            const patterns = ['metrics:endpoint:*', 'metrics:requests'];
+            for (const pattern of patterns) {
+                const keys = await redis.keys(pattern);
+                for (const key of keys) {
+                    await redis.ltrim(key, 0, 999); // Keep last 1000 entries
+                }
+            }
+            logger.info('Metrics cleanup completed');
+        } catch (error) {
+            logger.error('Metrics cleanup error:', error);
+        }
+    }, 6 * 60 * 60 * 1000);
+
+    logger.info('Scheduled jobs initialized');
+};
+
+// ===== SERVER STARTUP =====
 const startServer = async () => {
     try {
-        logger.info('Connecting to MongoDB...');
+        logger.info('Starting CircleMate server...');
         
-        // MongoDB connection options
-        const mongoOptions = {
-            autoIndex: true,
-            serverSelectionTimeoutMS: 5000,
-            socketTimeoutMS: 45000,
-        };
-
-        await mongoose.connect(dbAltHost, mongoOptions);
+        // Connect to MongoDB
+        await connectDB();
         
-        logger.info('Connected to MongoDB successfully');
-
-        // MongoDB connection event handlers
-        mongoose.connection.on('error', (error) => {
-            logger.error('MongoDB connection error:', error);
-        });
-
-        mongoose.connection.on('disconnected', () => {
-            logger.warn('MongoDB disconnected');
-        });
-
-        mongoose.connection.on('reconnected', () => {
-            logger.info('MongoDB reconnected');
-        });
-
-        // Start cleanup job for expired sessions
-        const Session = require('./models/sessionModel');
-        const User = require('./models/userModel');
+        // Verify Redis connection
+        await redis.set('startup:check', new Date().toISOString());
+        logger.info('Redis connection verified');
         
-        // Session cleanup job
-        setInterval(async () => {
-            try {
-                const result = await Session.cleanupExpired();
-                logger.info('Expired sessions cleaned up');
-            } catch (error) {
-                logger.error('Session cleanup error:', error);
-            }
-        }, 60 * 60 * 1000); // Run every hour
-
-        // Unverified accounts cleanup job
-        setInterval(async () => {
-            try {
-                const result = await User.cleanupUnverifiedAccounts();
-                if (result.deletedCount > 0) {
-                    logger.info(`Cleaned up ${result.deletedCount} unverified accounts`);
-                }
-            } catch (error) {
-                logger.error('Unverified accounts cleanup error:', error);
-            }
-        }, 24 * 60 * 60 * 1000); // Run once per day
-
+        // Setup scheduled jobs
+        if (!process.env.WORKER_NAME || process.env.WORKER_NAME === 'primary') {
+            setupScheduledJobs();
+        }
+        
+        // Start server
         const PORT = process.env.PORT || 3000;
-        server = app.listen(PORT, () => {
+        server = app.listen(PORT, '0.0.0.0', () => {
             logger.info(`Server running on port ${PORT}`);
             logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
-            logger.info(`Database: Connected to ${mongoose.connection.name}`);
             logger.info(`Process ID: ${process.pid}`);
+            logger.info(`Node version: ${process.version}`);
+            
+            // Log startup metrics
+            const usage = process.memoryUsage();
+            logger.info('Startup memory usage:', {
+                rss: `${Math.round(usage.rss / 1024 / 1024)}MB`,
+                heapTotal: `${Math.round(usage.heapTotal / 1024 / 1024)}MB`,
+                heapUsed: `${Math.round(usage.heapUsed / 1024 / 1024)}MB`
+            });
         });
 
-        // Server error handler
+        // Handle server errors
         server.on('error', (error) => {
             logger.error('Server error:', error);
             if (error.code === 'EADDRINUSE') {
@@ -429,6 +461,11 @@ const startServer = async () => {
                 process.exit(1);
             }
         });
+
+        // Set server timeout
+        server.timeout = 60000; // 60 seconds
+        server.keepAliveTimeout = 65000; // 65 seconds
+        server.headersTimeout = 66000; // 66 seconds
 
     } catch (error) {
         logger.error('Failed to start server:', error);
@@ -439,4 +476,5 @@ const startServer = async () => {
 // Start the application
 startServer();
 
+// Export for testing
 module.exports = app;
