@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const { v4: uuidv4 } = require('uuid'); 
 const crypto = require('crypto');
@@ -9,7 +9,6 @@ const UserVerification = require('../models/UserVerification');
 const Session = require('../models/sessionModel'); 
 const createError = require('../utils/appError');
 const logger = require('../utils/logger');
-const { Worker } = require('worker_threads');
 const { validateSignup, validateLogin, validatePasswordReset } = require('../utils/inputValidation');
 
 require('dotenv').config();
@@ -178,221 +177,54 @@ const cleanupExpiredSessions = async () => {
     }
 };
 
-// Bcrypt Worker Pool for non-blocking operations
-class BcryptWorkerPool {
-    constructor(poolSize = 4) {
-        this.workers = [];
-        this.queue = [];
-        this.poolSize = poolSize;
-        this.currentWorker = 0;
-        this.initializeWorkers();
-    }
-
-    initializeWorkers() {
-        const workerCode = `
-            const { parentPort } = require('worker_threads');
-            const bcrypt = require('bcrypt');
-            
-            parentPort.on('message', async ({ id, type, data }) => {
-                try {
-                    let result;
-                    if (type === 'hash') {
-                        result = await bcrypt.hash(data.password, data.rounds);
-                    } else if (type === 'compare') {
-                        result = await bcrypt.compare(data.password, data.hash);
-                    }
-                    parentPort.postMessage({ id, result, error: null });
-                } catch (error) {
-                    parentPort.postMessage({ id, result: null, error: error.message });
-                }
-            });
-        `;
-
-        for (let i = 0; i < this.poolSize; i++) {
-            const worker = new Worker(workerCode, { eval: true });
-            this.workers.push(worker);
-        }
-    }
-
-    async execute(type, data) {
-        return new Promise((resolve, reject) => {
-            const id = uuidv4();
-            const worker = this.workers[this.currentWorker];
-            this.currentWorker = (this.currentWorker + 1) % this.poolSize;
-
-            const timeout = setTimeout(() => {
-                reject(new Error('Bcrypt operation timeout'));
-            }, 10000);
-
-            const handler = (message) => {
-                if (message.id === id) {
-                    clearTimeout(timeout);
-                    worker.off('message', handler);
-                    if (message.error) {
-                        reject(new Error(message.error));
-                    } else {
-                        resolve(message.result);
-                    }
-                }
-            };
-
-            worker.on('message', handler);
-            worker.postMessage({ id, type, data });
-        });
-    }
-
-    async hash(password, rounds = config.security.bcryptRounds) {
-        return this.execute('hash', { password, rounds });
-    }
-
-    async compare(password, hash) {
-        return this.execute('compare', { password, hash });
-    }
-
-    terminate() {
-        this.workers.forEach(worker => worker.terminate());
-    }
-}
-
-// Initialize bcrypt worker pool
-const bcryptPool = new BcryptWorkerPool();
-
-// Email queue for better performance
-class EmailQueue {
-    constructor() {
-        this.queue = [];
-        this.processing = false;
-        this.transporter = this.createTransporter();
-    }
-
-    createTransporter() {
-        return nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-                user: config.email.host,
-                pass: config.email.password,
-            },
-            pool: true,
-            maxConnections: 5,
-            maxMessages: 10,
-            rateDelta: 1000,
-            rateLimit: 5,
-            // logger: process.env.NODE_ENV === 'development',
-            // debug: process.env.NODE_ENV === 'development'
-        });
-    }
-
-    async add(mailOptions, priority = 0) {
-        return new Promise((resolve, reject) => {
-            this.queue.push({ mailOptions, priority, resolve, reject });
-            this.queue.sort((a, b) => b.priority - a.priority);
-            this.process();
-        });
-    }
-
-    async process() {
-        if (this.processing || this.queue.length === 0) return;
-        
-        this.processing = true;
-        const email = this.queue.shift();
-        
-        try {
-            const result = await this.transporter.sendMail(email.mailOptions);
-            email.resolve(result);
-        } catch (error) {
-            logger.error('Email send failed:', error);
-            email.reject(error);
-        } finally {
-            this.processing = false;
-            if (this.queue.length > 0) {
-                setTimeout(() => this.process(), 200); // Rate limiting
-            }
-        }
-    }
-
-    async verify() {
-        try {
-            await this.transporter.verify();
-            logger.info('Email transporter verified successfully');
-            return true;
-        } catch (error) {
-            logger.error('Email transporter verification failed:', error);
-            return false;
-        }
-    }
-}
-
-const emailQueue = new EmailQueue();
-
-// Enhanced email sending with retry and queueing
-const sendVerificationEmail = async ({ _id, email }, priority = 1) => {
-    const currentUrl = `${config.baseUrl}/api/auth/verify/`;
-    const uniqueString = `${uuidv4()}${_id}`;
-    
+// Enhanced email sending with retry logic
+const sendVerificationEmail = async ({ _id, email }, retries = 3) => {
     try {
-        // Use bcrypt worker pool for non-blocking hashing
-        const hashedUniqueString = await bcryptPool.hash(uniqueString, 10);
+        const currentUrl = `${config.baseUrl}/api/auth/verify/`;
+        const uniqueString = `${uuidv4()}${_id}`;
+        const hashedUniqueString = await bcrypt.hash(uniqueString, 10);
 
-        // Atomic operation to create verification record
-        await UserVerification.findOneAndUpdate(
-            { userId: _id },
-            {
-                userId: _id,
-                uniqueString: hashedUniqueString,
-                createdAt: Date.now(),
-                expiresAt: Date.now() + 6 * 60 * 60 * 1000
-            },
-            { upsert: true, new: true }
-        );
+        await new UserVerification({
+            userId: _id,
+            uniqueString: hashedUniqueString,
+            createdAt: Date.now(),
+            expiresAt: Date.now() + 6 * 60 * 60 * 1000,
+        }).save();
 
         const mailOptions = {
-            from: `CircleMate <${config.email.host}>`,
+            from: config.email.host,
             to: email,
-            subject: 'Verify Your Email - CircleMate',
+            subject: 'Verify Your Email',
             html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="text-align: center; margin-bottom: 30px;">
-                        <h1 style="color: #4CAF50; margin: 0;">CircleMate</h1>
-                        <p style="color: #666; margin-top: 5px;">Connect with your community</p>
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #333;">Email Verification</h2>
+                    <p>Thank you for signing up! Please verify your email address to complete the registration process.</p>
+                    <p>This verification link will <strong>expire in 6 hours</strong>.</p>
+                    <div style="margin: 30px 0;">
+                        <a href="${currentUrl}${_id}/${uniqueString}" 
+                           style="background-color: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; display: inline-block;">
+                            Verify Email Address
+                        </a>
                     </div>
-                    
-                    <div style="background-color: #f9f9f9; border-radius: 8px; padding: 30px;">
-                        <h2 style="color: #333; margin-top: 0;">Email Verification</h2>
-                        <p style="color: #555; line-height: 1.6;">
-                            Thank you for signing up! Please verify your email address to complete the registration process.
-                        </p>
-                        <p style="color: #555; line-height: 1.6;">
-                            This verification link will <strong>expire in 6 hours</strong>.
-                        </p>
-                        
-                        <div style="text-align: center; margin: 30px 0;">
-                            <a href="${currentUrl}${_id}/${uniqueString}" 
-                               style="background-color: #4CAF50; color: white; padding: 14px 30px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: 500;">
-                                Verify Email Address
-                            </a>
-                        </div>
-                        
-                        <p style="color: #999; font-size: 14px; text-align: center;">
-                            If the button doesn't work, copy and paste this link into your browser:
-                        </p>
-                        <p style="color: #999; font-size: 12px; text-align: center; word-break: break-all;">
-                            ${currentUrl}${_id}/${uniqueString}
-                        </p>
-                    </div>
-                    
-                    <p style="color: #999; font-size: 12px; text-align: center; margin-top: 20px;">
-                        If you didn't create an account, please ignore this email.
-                    </p>
+                    <p style="color: #666; font-size: 14px;">If you didn't create an account, please ignore this email.</p>
                 </div>
-            `
+            `,
         };
 
-        await emailQueue.add(mailOptions, priority);
-        logger.info(`Verification email queued for: ${email}`);
-        
+        logger.info(`Sending verification email to: ${email}`);
+        await transporter.sendMail(mailOptions);
+        logger.info(`Verification email sent successfully to: ${email}`);
+
         return { status: 'PENDING', message: 'Verification email sent!' };
     } catch (error) {
         logger.error(`Failed to send verification email to ${email}:`, error);
+        
+        if (retries > 0) {
+            logger.info(`Retrying email send... ${retries} attempts left`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            return sendVerificationEmail({ _id, email }, retries - 1);
+        }
+        
         throw new Error('Failed to send verification email. Please try again later.');
     }
 };
