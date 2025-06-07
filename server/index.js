@@ -17,7 +17,6 @@ const onboardingRouter = require('./routes/onboardingRoutes');
 const waitlistRouter = require('./routes/waitListRoutes');
 const importCsvRouter = require("./models/importCsv");
 
-
 const app = express();
 require('dotenv').config();
 

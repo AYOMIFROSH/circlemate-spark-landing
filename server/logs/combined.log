@@ -522,3 +522,6 @@
 {"duration":"1199ms","ip":"::1","level":"info","message":"Request completed:","method":"GET","status":302,"timestamp":"2025-06-07 18:07:06","url":"/api/auth/verify/6844719c10cdea5ac52f303e/b164fc2c-566b-4a6b-a289-4dc1ba238f5c6844719c10cdea5ac52f303e","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
 {"level":"info","message":"Email verified successfully!","success":"true","timestamp":"2025-06-07 18:07:06"}
 {"duration":"85ms","ip":"::1","level":"info","message":"Request completed:","method":"GET","status":200,"timestamp":"2025-06-07 18:07:06","url":"/api/verified?success=true&message=Email%20verified%20successfully!","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+{"level":"info","message":"Connecting to MongoDB...","timestamp":"2025-06-07 18:13:27"}
+{"level":"info","message":"Email server is ready","timestamp":"2025-06-07 18:13:30"}
+{"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-07 18:13:32"}
