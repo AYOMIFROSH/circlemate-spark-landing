@@ -35,7 +35,7 @@ const API_BASE =
 
 // Fetch wrapper: throw server-sent message if available
 const fetchWaitlist = async (): Promise<WaitlistEntry[]> => {
-  const res = await fetch(`${API_BASE}/api/waitlist`);
+  const res = await fetch(`${API_BASE}/api/v1/waitlist`);
   const wrapper = await res.json();
   if (!res.ok) {
     const msg = wrapper.message || wrapper.error || "Failed to fetch waitlist";
