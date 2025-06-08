@@ -525,3 +525,25 @@
 {"level":"info","message":"Connecting to MongoDB...","timestamp":"2025-06-07 18:13:27"}
 {"level":"info","message":"Email server is ready","timestamp":"2025-06-07 18:13:30"}
 {"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-07 18:13:32"}
+{"level":"info","message":"Connected to MongoDB successfully","timestamp":"2025-06-07 18:13:36"}
+{"level":"info","message":"Server running on port 3000","timestamp":"2025-06-07 18:13:36"}
+{"level":"info","message":"Environment: development","timestamp":"2025-06-07 18:13:36"}
+{"level":"info","message":"Database: Connected to test","timestamp":"2025-06-07 18:13:36"}
+{"level":"info","message":"Process ID: 8628","timestamp":"2025-06-07 18:13:36"}
+{"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-07 18:16:09"}
+{"level":"info","message":"Connecting to MongoDB...","timestamp":"2025-06-08 01:00:48"}
+{"level":"info","message":"Email server is ready","timestamp":"2025-06-08 01:00:49"}
+{"level":"info","message":"Connected to MongoDB successfully","timestamp":"2025-06-08 01:00:53"}
+{"level":"info","message":"Server running on port 3000","timestamp":"2025-06-08 01:00:53"}
+{"level":"info","message":"Environment: development","timestamp":"2025-06-08 01:00:53"}
+{"level":"info","message":"Database: Connected to test","timestamp":"2025-06-08 01:00:53"}
+{"level":"info","message":"Process ID: 10852","timestamp":"2025-06-08 01:00:53"}
+{"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-08 01:11:49"}
+{"level":"info","message":"Connecting to MongoDB...","timestamp":"2025-06-08 01:11:59"}
+{"level":"info","message":"Email server is ready","timestamp":"2025-06-08 01:12:00"}
+{"level":"info","message":"Connected to MongoDB successfully","timestamp":"2025-06-08 01:12:05"}
+{"level":"info","message":"Server running on port 3000","timestamp":"2025-06-08 01:12:05"}
+{"level":"info","message":"Environment: development","timestamp":"2025-06-08 01:12:05"}
+{"level":"info","message":"Database: Connected to test","timestamp":"2025-06-08 01:12:05"}
+{"level":"info","message":"Process ID: 9616","timestamp":"2025-06-08 01:12:05"}
+{"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-08 01:13:51"}

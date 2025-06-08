@@ -97,15 +97,6 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
-    // Optional fields for future use
-    fileUploadCount: {
-        type: Number,
-        default: 0
-    },
-    ProcessedDocument: {
-        type: Number,
-        default: 0
-    },
     // Account status
     isActive: {
         type: Boolean,

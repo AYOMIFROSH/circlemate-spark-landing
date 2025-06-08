@@ -58,14 +58,16 @@ const getCookieOptions = (rememberMe = false) => ({
 // Enhanced NODEMAILER TRANSPORTER with better error handling
 const transporter = nodemailer.createTransport({
     service: 'gmail',
-    auth: {
-        user: config.email.host,
-        pass: config.email.password,
-    },
-    pool: true,
-    maxConnections: 5,
-    maxMessages: 10
-});
+            auth: {
+                user: config.email.host,
+                pass: config.email.password,
+            },
+            pool: true,
+            maxConnections: 5,
+            maxMessages: 10,
+            rateDelta: 1000,
+            rateLimit: 5,
+    });
 
 // Verify transporter configuration
 transporter.verify((error, success) => {
@@ -192,23 +194,45 @@ const sendVerificationEmail = async ({ _id, email }, retries = 3) => {
         }).save();
 
         const mailOptions = {
-            from: config.email.host,
+            from: `CircleMate <${config.email.host}>`,
             to: email,
-            subject: 'Verify Your Email',
+            subject: 'Verify Your Email - CircleMate',
             html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #333;">Email Verification</h2>
-                    <p>Thank you for signing up! Please verify your email address to complete the registration process.</p>
-                    <p>This verification link will <strong>expire in 6 hours</strong>.</p>
-                    <div style="margin: 30px 0;">
-                        <a href="${currentUrl}${_id}/${uniqueString}" 
-                           style="background-color: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; display: inline-block;">
-                            Verify Email Address
-                        </a>
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                    <div style="text-align: center; margin-bottom: 30px;">
+                        <h1 style="color: #4CAF50; margin: 0;">CircleMate</h1>
+                        <p style="color: #666; margin-top: 5px;">Connect with your community</p>
                     </div>
-                    <p style="color: #666; font-size: 14px;">If you didn't create an account, please ignore this email.</p>
+                    
+                    <div style="background-color: #f9f9f9; border-radius: 8px; padding: 30px;">
+                        <h2 style="color: #333; margin-top: 0;">Email Verification</h2>
+                        <p style="color: #555; line-height: 1.6;">
+                            Thank you for signing up! Please verify your email address to complete the registration process.
+                        </p>
+                        <p style="color: #555; line-height: 1.6;">
+                            This verification link will <strong>expire in 6 hours</strong>.
+                        </p>
+                        
+                        <div style="text-align: center; margin: 30px 0;">
+                            <a href="${currentUrl}${_id}/${uniqueString}" 
+                               style="background-color: #4CAF50; color: white; padding: 14px 30px; text-decoration: none; border-radius: 25px; display: inline-block; font-weight: 500;">
+                                Verify Email Address
+                            </a>
+                        </div>
+                        
+                        <p style="color: #999; font-size: 14px; text-align: center;">
+                            If the button doesn't work, copy and paste this link into your browser:
+                        </p>
+                        <p style="color: #999; font-size: 12px; text-align: center; word-break: break-all;">
+                            ${currentUrl}${_id}/${uniqueString}
+                        </p>
+                    </div>
+                    
+                    <p style="color: #999; font-size: 12px; text-align: center; margin-top: 20px;">
+                        If you didn't create an account, please ignore this email.
+                    </p>
                 </div>
-            `,
+            `
         };
 
         logger.info(`Sending verification email to: ${email}`);
