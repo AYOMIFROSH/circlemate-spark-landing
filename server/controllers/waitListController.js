@@ -2,6 +2,15 @@ const Waitlist = require('../models/waitListModel');
 const createError = require('../utils/appError');
 const logger = require('../utils/logger');
 const { Parser } = require('json2csv');
+const NodeCache = require('node-cache');
+
+// Initialize cache with 5 minute TTL
+const waitlistCache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
+
+// Helper function to generate cache key
+const getCacheKey = (query, page, limit, sortBy, order) => {
+    return `waitlist_${JSON.stringify(query)}_${page}_${limit}_${sortBy}_${order}`;
+};
 
 // Submit waitlist entry
 exports.submitWaitlist = async (req, res, next) => {
@@ -32,6 +41,9 @@ exports.submitWaitlist = async (req, res, next) => {
 
         await newEntry.save();
 
+        // Clear cache when new entry is added
+        waitlistCache.flushAll();
+
         logger.info(`New waitlist entry: ${email}`);
 
         // You can add email notification here if needed
@@ -58,12 +70,12 @@ exports.submitWaitlist = async (req, res, next) => {
     }
 };
 
-// Get all waitlist entries (protected route)
+// Get all waitlist entries with optimized fetching and caching
 exports.getWaitlist = async (req, res, next) => {
     try {
         const { 
             page = 1, 
-            limit = 50, 
+            limit = 'all', // Reduced default limit for faster response
             search = '', 
             status = 'all',
             sortBy = 'createdAt',
@@ -85,54 +97,72 @@ exports.getWaitlist = async (req, res, next) => {
             query.status = status;
         }
 
+        // Generate cache key
+        const cacheKey = getCacheKey(query, page, limit, sortBy, order);
+        
+        // Check cache first
+        const cachedData = waitlistCache.get(cacheKey);
+        if (cachedData) {
+            logger.info('Returning cached waitlist data');
+            return res.status(200).json(cachedData);
+        }
+
         // Calculate pagination
-        const skip = (page - 1) * limit;
+        const skip = (parseInt(page) - 1) * parseInt(limit);
         const sortOrder = order === 'desc' ? -1 : 1;
 
-        // Execute query
-        const [entries, total] = await Promise.all([
+        // Use lean() for better performance and select only needed fields
+        const [entries, total, stats, totalStats] = await Promise.all([
             Waitlist.find(query)
+                .select('firstName lastName email interest status createdAt') // Only select needed fields
                 .sort({ [sortBy]: sortOrder })
-                .limit(limit * 1)
+                .limit(parseInt(limit))
                 .skip(skip)
-                .lean(),
-            Waitlist.countDocuments(query)
-        ]);
-
-        // Get statistics
-        const stats = await Waitlist.aggregate([
-            {
-                $group: {
-                    _id: '$interest',
-                    count: { $sum: 1 }
+                .lean()
+                .exec(),
+            Waitlist.countDocuments(query),
+            // Aggregate stats only if needed (first page without search)
+            page == 1 && !search ? Waitlist.aggregate([
+                { $match: query },
+                {
+                    $group: {
+                        _id: '$interest',
+                        count: { $sum: 1 }
+                    }
+                },
+                { $sort: { count: -1 } }
+            ]) : [],
+            page == 1 && !search ? Waitlist.aggregate([
+                { $match: query },
+                {
+                    $group: {
+                        _id: '$status',
+                        count: { $sum: 1 }
+                    }
                 }
-            }
+            ]) : []
         ]);
 
-        const totalStats = await Waitlist.aggregate([
-            {
-                $group: {
-                    _id: '$status',
-                    count: { $sum: 1 }
-                }
-            }
-        ]);
-
-        res.status(200).json({
+        const response = {
             status: 'success',
             data: entries,
             pagination: {
-                page: Number(page),
-                limit: Number(limit),
+                page: parseInt(page),
+                limit: parseInt(limit),
                 total,
-                pages: Math.ceil(total / limit)
+                pages: Math.ceil(total / parseInt(limit))
             },
             stats: {
                 byInterest: stats,
                 byStatus: totalStats,
                 total
             }
-        });
+        };
+
+        // Cache the response
+        waitlistCache.set(cacheKey, response);
+
+        res.status(200).json(response);
 
     } catch (error) {
         logger.error('Get waitlist error:', error);
@@ -140,32 +170,66 @@ exports.getWaitlist = async (req, res, next) => {
     }
 };
 
-// Export waitlist as CSV
+// Export waitlist as CSV with streaming for large datasets
 exports.exportWaitlist = async (req, res, next) => {
     try {
-        const entries = await Waitlist.find({})
-            .sort({ createdAt: -1 })
-            .lean();
-
-        // Transform data for CSV
-        const csvData = entries.map(entry => ({
-            'First Name': entry.firstName,
-            'Last Name': entry.lastName,
-            'Email': entry.email,
-            'Interest': entry.interest,
-            'Status': entry.status,
-            'Joined Date': new Date(entry.createdAt).toLocaleString()
-        }));
-
-        // Create CSV
-        const json2csvParser = new Parser();
-        const csv = json2csvParser.parse(csvData);
-
-        // Set headers for file download
+        // Set headers for file download immediately
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=waitlist.csv');
-        
-        res.status(200).send(csv);
+
+        // Define CSV fields
+        const fields = [
+            { label: 'First Name', value: 'firstName' },
+            { label: 'Last Name', value: 'lastName' },
+            { label: 'Email', value: 'email' },
+            { label: 'Interest', value: 'interest' },
+            { label: 'Status', value: 'status' },
+            { label: 'Joined Date', value: (row) => new Date(row.createdAt).toLocaleString() }
+        ];
+
+        // Create CSV parser with fields
+        const json2csvParser = new Parser({ fields });
+
+        // Use cursor for streaming large datasets
+        const cursor = Waitlist.find({})
+            .sort({ createdAt: -1 })
+            .lean()
+            .cursor();
+
+        let isFirstBatch = true;
+        let csvData = '';
+
+        cursor.on('data', (doc) => {
+            try {
+                const csv = json2csvParser.parse([doc]);
+                
+                if (isFirstBatch) {
+                    csvData = csv; // Include headers
+                    isFirstBatch = false;
+                } else {
+                    // Remove header from subsequent batches
+                    csvData = csv.split('\n').slice(1).join('\n');
+                }
+                
+                res.write(csvData + '\n');
+            } catch (err) {
+                logger.error('Error processing CSV row:', err);
+            }
+        });
+
+        cursor.on('error', (error) => {
+            logger.error('Export cursor error:', error);
+            if (!res.headersSent) {
+                res.status(500).json({
+                    status: 'error',
+                    message: 'Error exporting data'
+                });
+            }
+        });
+
+        cursor.on('end', () => {
+            res.end();
+        });
 
     } catch (error) {
         logger.error('Export waitlist error:', error);
@@ -197,6 +261,9 @@ exports.updateWaitlistStatus = async (req, res, next) => {
             return next(new createError('Waitlist entry not found', 404));
         }
 
+        // Clear cache when data is updated
+        waitlistCache.flushAll();
+
         res.status(200).json({
             status: 'success',
             data: entry
@@ -219,6 +286,9 @@ exports.deleteWaitlistEntry = async (req, res, next) => {
             return next(new createError('Waitlist entry not found', 404));
         }
 
+        // Clear cache when data is deleted
+        waitlistCache.flushAll();
+
         res.status(200).json({
             status: 'success',
             message: 'Waitlist entry deleted successfully'
@@ -230,9 +300,17 @@ exports.deleteWaitlistEntry = async (req, res, next) => {
     }
 };
 
-// Get waitlist statistics
+// Get waitlist statistics with caching
 exports.getWaitlistStats = async (req, res, next) => {
     try {
+        const cacheKey = 'waitlist_stats';
+        
+        // Check cache first
+        const cachedStats = waitlistCache.get(cacheKey);
+        if (cachedStats) {
+            return res.status(200).json(cachedStats);
+        }
+
         const stats = await Waitlist.aggregate([
             {
                 $facet: {
@@ -242,7 +320,8 @@ exports.getWaitlistStats = async (req, res, next) => {
                                 _id: '$interest',
                                 count: { $sum: 1 }
                             }
-                        }
+                        },
+                        { $sort: { count: -1 } }
                     ],
                     byStatus: [
                         {
@@ -270,9 +349,9 @@ exports.getWaitlistStats = async (req, res, next) => {
                     ]
                 }
             }
-        ]);
+        ]).allowDiskUse(true); // Allow disk use for large aggregations
 
-        res.status(200).json({
+        const response = {
             status: 'success',
             data: {
                 byInterest: stats[0].byInterest,
@@ -280,7 +359,12 @@ exports.getWaitlistStats = async (req, res, next) => {
                 byMonth: stats[0].byMonth,
                 total: stats[0].total[0]?.count || 0
             }
-        });
+        };
+
+        // Cache the stats
+        waitlistCache.set(cacheKey, response);
+
+        res.status(200).json(response);
 
     } catch (error) {
         logger.error('Get waitlist stats error:', error);

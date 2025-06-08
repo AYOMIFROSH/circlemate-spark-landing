@@ -547,3 +547,42 @@
 {"level":"info","message":"Database: Connected to test","timestamp":"2025-06-08 01:12:05"}
 {"level":"info","message":"Process ID: 9616","timestamp":"2025-06-08 01:12:05"}
 {"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-08 01:13:51"}
+{"level":"info","message":"Connecting to MongoDB...","timestamp":"2025-06-08 01:14:00"}
+{"level":"info","message":"Email server is ready","timestamp":"2025-06-08 01:14:01"}
+{"level":"info","message":"Connected to MongoDB successfully","timestamp":"2025-06-08 01:14:04"}
+{"level":"info","message":"Server running on port 3000","timestamp":"2025-06-08 01:14:04"}
+{"level":"info","message":"Environment: development","timestamp":"2025-06-08 01:14:04"}
+{"level":"info","message":"Database: Connected to test","timestamp":"2025-06-08 01:14:04"}
+{"level":"info","message":"Process ID: 14980","timestamp":"2025-06-08 01:14:04"}
+{"level":"info","message":"New user created: rhymeanabel@gmail.com","timestamp":"2025-06-08 01:18:30"}
+{"level":"info","message":"Sending verification email to: rhymeanabel@gmail.com","timestamp":"2025-06-08 01:18:30"}
+{"level":"info","message":"Verification email sent successfully to: rhymeanabel@gmail.com","timestamp":"2025-06-08 01:18:33"}
+{"duration":"4150ms","ip":"::1","level":"info","message":"Request completed:","method":"POST","status":201,"timestamp":"2025-06-08 01:18:33","url":"/api/auth/signup","user":"anonymous","userAgent":"PostmanRuntime/7.44.0"}
+{"level":"info","message":"Email verification attempt for user: 6844d6d6bd8cc096bacd4020","timestamp":"2025-06-08 01:19:08"}
+{"level":"info","message":"User 6844d6d6bd8cc096bacd4020 successfully verified","timestamp":"2025-06-08 01:19:09"}
+{"duration":"894ms","ip":"::1","level":"info","message":"Request completed:","method":"GET","status":302,"timestamp":"2025-06-08 01:19:09","url":"/api/auth/verify/6844d6d6bd8cc096bacd4020/95bc8a37-025b-482a-b5f6-f1469204bc366844d6d6bd8cc096bacd4020","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+{"level":"info","message":"Email verified successfully!","success":"true","timestamp":"2025-06-08 01:19:09"}
+{"duration":"52ms","ip":"::1","level":"info","message":"Request completed:","method":"GET","status":200,"timestamp":"2025-06-08 01:19:09","url":"/api/verified?success=true&message=Email%20verified%20successfully!","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+{"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-08 02:09:23"}
+{"level":"info","message":"Starting application...","timestamp":"2025-06-08 02:10:23"}
+{"level":"info","message":"Email server is ready","timestamp":"2025-06-08 02:10:24"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-06-08 02:10:27"}
+{"level":"info","message":"Server running on port 3000","timestamp":"2025-06-08 02:10:27"}
+{"level":"info","message":"Environment: development","timestamp":"2025-06-08 02:10:27"}
+{"level":"info","message":"Database: Connected to test","timestamp":"2025-06-08 02:10:27"}
+{"level":"info","message":"Process ID: 8288","timestamp":"2025-06-08 02:10:27"}
+{"level":"info","message":"API Version: v1","timestamp":"2025-06-08 02:10:27"}
+{"duration":"324ms","ip":"::1","level":"info","message":"Request completed:","method":"GET","requestId":"8ac03aa9-ff96-4b26-9c8c-6c9ef21422b7","status":200,"timestamp":"2025-06-08 02:12:38","url":"/api/v1/waitlist","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+{"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-08 02:15:38"}
+{"level":"info","message":"Starting application...","timestamp":"2025-06-08 02:15:54"}
+{"level":"info","message":"Email server is ready","timestamp":"2025-06-08 02:15:56"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-06-08 02:15:59"}
+{"level":"info","message":"Server running on port 3000","timestamp":"2025-06-08 02:15:59"}
+{"level":"info","message":"Environment: development","timestamp":"2025-06-08 02:15:59"}
+{"level":"info","message":"Database: Connected to test","timestamp":"2025-06-08 02:15:59"}
+{"level":"info","message":"Process ID: 14268","timestamp":"2025-06-08 02:15:59"}
+{"level":"info","message":"API Version: v1","timestamp":"2025-06-08 02:15:59"}
+{"level":"error","message":"Get waitlist error: limit is not defined","stack":"ReferenceError: limit is not defined\n    at exports.getWaitlist (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\controllers\\waitListController.js:101:51)\n    at Layer.handle [as handle_request] (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at Function.handle (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\index.js:47:12)","timestamp":"2025-06-08 02:16:09"}
+{"ip":"::1","level":"error","message":"limit is not defined","method":"GET","requestId":"832fef0d-6a3a-4a82-bf01-7c849d3209a4","stack":"ReferenceError: limit is not defined\n    at exports.getWaitlist (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\controllers\\waitListController.js:101:51)\n    at Layer.handle [as handle_request] (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at next (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\route.js:149:13)\n    at Route.dispatch (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\route.js:119:3)\n    at Layer.handle [as handle_request] (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\layer.js:95:5)\n    at C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\index.js:284:15\n    at Function.process_params (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\index.js:346:12)\n    at next (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\index.js:280:10)\n    at Function.handle (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\index.js:175:3)\n    at router (C:\\Users\\Temitayo\\Desktop\\CircleMate_Web_Project\\server\\node_modules\\express\\lib\\router\\index.js:47:12)","timestamp":"2025-06-08T01:16:09.681Z","url":"/api/v1/waitlist"}
+{"duration":"167ms","ip":"::1","level":"error","message":"Request failed:","method":"GET","requestId":"832fef0d-6a3a-4a82-bf01-7c849d3209a4","status":500,"timestamp":"2025-06-08 02:16:09","url":"/api/v1/waitlist","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+{"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-08 02:16:36"}

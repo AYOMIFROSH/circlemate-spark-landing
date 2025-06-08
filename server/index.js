@@ -8,6 +8,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
 const morgan = require('morgan');
+const { v4: uuidv4 } = require('uuid');
 
 const authRouter = require('./routes/authRoutes');
 const { verifiedPage } = require('./controllers/authController');
@@ -16,6 +17,11 @@ const logger = require('./utils/logger');
 const onboardingRouter = require('./routes/onboardingRoutes');
 const waitlistRouter = require('./routes/waitListRoutes');
 const importCsvRouter = require("./models/importCsv");
+const { 
+    networkCheck, 
+    mongooseNetworkErrorHandler,
+    emailNetworkErrorHandler 
+} = require('./utils/networkMiddleware');
 
 const app = express();
 require('dotenv').config();
@@ -31,6 +37,13 @@ if (missingEnvVars.length > 0) {
 
 const dbAltHost = process.env.DB_ALT_HOST;
 const SESSION_SECRET = process.env.SESSION_SECRET;
+
+// Request ID middleware (should be first)
+app.use((req, res, next) => {
+    req.id = req.headers['x-request-id'] || uuidv4();
+    res.setHeader('x-request-id', req.id);
+    next();
+});
 
 // Compression middleware
 app.use(compression());
@@ -57,10 +70,16 @@ app.use(helmet({
 app.use(securityHeaders);
 
 // Request logging
-app.use(morgan('combined', { stream: logger.stream }));
+app.use(morgan('combined', { 
+    stream: logger.stream,
+    skip: (req) => req.url === '/health' || req.url === '/api/health'
+}));
 app.use(requestLogger);
 
-// Rate limiting
+// Network connectivity check middleware
+app.use(networkCheck);
+
+// Rate limiting with Redis store for distributed systems (if available)
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 100, // Limit each IP to 100 requests per windowMs
@@ -71,10 +90,11 @@ const limiter = rateLimit({
     standardHeaders: true,
     legacyHeaders: false,
     handler: (req, res) => {
-        logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
+        logger.warn(`Rate limit exceeded for IP: ${req.ip}, Request ID: ${req.id}`);
         res.status(429).json({
             status: 'FAILED',
-            message: 'Too many requests from this IP, please try again later.'
+            message: 'Too many requests from this IP, please try again later.',
+            requestId: req.id
         });
     }
 });
@@ -114,7 +134,7 @@ const corsOptions = {
         }
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-Requested-With', 'X-Request-ID'],
     credentials: true,
     maxAge: 86400, // 24 hours
     optionsSuccessStatus: 200
@@ -137,7 +157,7 @@ app.use(cookieParser());
 app.use(
     mongoSanitize({
         onSanitize: ({ req, key }) => {
-            logger.warn(`Potentially malicious key detected: ${key} from IP: ${req.ip}`);
+            logger.warn(`Potentially malicious key detected: ${key} from IP: ${req.ip}, Request ID: ${req.id}`);
         },
     })
 );
@@ -149,7 +169,8 @@ app.get('/', (req, res) => {
         message: 'API is running',
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development',
-        version: process.env.API_VERSION || '1.0.0'
+        version: process.env.API_VERSION || '1.0.0',
+        requestId: req.id
     });
 });
 
@@ -164,9 +185,11 @@ app.get('/health', async (req, res) => {
         message: 'OK',
         timestamp: Date.now(),
         environment: process.env.NODE_ENV || 'development',
+        requestId: req.id,
         checks: {
             database: 'pending',
             memory: process.memoryUsage(),
+            network: 'connected'
         }
     };
 
@@ -182,7 +205,6 @@ app.get('/health', async (req, res) => {
     }
 });
 
-
 // Email verification success page
 app.get('/api/verified', verifiedPage);
 
@@ -191,34 +213,53 @@ app.use('/api/auth', authLimiter);
 
 app.use("/api", importCsvRouter); 
 
-// Main routes
+// API versioning
+const API_VERSION = 'v1';
+
+// Main routes with versioning
+app.use(`/api/${API_VERSION}/auth`, authRouter);
+app.use(`/api/${API_VERSION}/waitlist`, waitlistRouter);
+app.use(`/api/${API_VERSION}/onboarding`, onboardingRouter);
+
+// Legacy routes (for backward compatibility)
 app.use('/api/auth', authRouter);
-
 app.use('/api/waitlist', waitlistRouter);
-
 app.use('/api/onboarding', onboardingRouter);
 
-// API documentation route (placeholder)
+// API documentation route
 app.get('/api/docs', (req, res) => {
     res.json({
         status: 'success',
-        message: 'API documentation will be available here',
+        message: 'API documentation',
+        version: API_VERSION,
+        baseUrl: `${req.protocol}://${req.get('host')}/api/${API_VERSION}`,
         endpoints: {
             auth: {
-                signup: 'POST /api/auth/signup',
-                login: 'POST /api/auth/login',
-                logout: 'POST /api/auth/logout',
-                verify: 'GET /api/auth/verify/:userId/:uniqueString',
-                forgotPassword: 'POST /api/auth/forgotpassword',
-                resetPassword: 'POST /api/auth/reset-password/:token',
-                me: 'GET /api/auth/me',
-                sessions: 'GET /api/auth/sessions',
-                refreshToken: 'POST /api/auth/refresh'
+                signup: `POST /api/${API_VERSION}/auth/signup`,
+                login: `POST /api/${API_VERSION}/auth/login`,
+                logout: `POST /api/${API_VERSION}/auth/logout`,
+                verify: `GET /api/${API_VERSION}/auth/verify/:userId/:uniqueString`,
+                forgotPassword: `POST /api/${API_VERSION}/auth/forgotpassword`,
+                resetPassword: `POST /api/${API_VERSION}/auth/reset-password/:token`,
+                me: `GET /api/${API_VERSION}/auth/me`,
+                sessions: `GET /api/${API_VERSION}/auth/sessions`,
+                refreshToken: `POST /api/${API_VERSION}/auth/refresh`
+            },
+            waitlist: {
+                submit: `POST /api/${API_VERSION}/waitlist/submit`,
+                getAll: `GET /api/${API_VERSION}/waitlist`,
+                export: `GET /api/${API_VERSION}/waitlist/export`,
+                stats: `GET /api/${API_VERSION}/waitlist/stats`
+            },
+            onboarding: {
+                status: `GET /api/${API_VERSION}/onboarding/status`,
+                community: `POST /api/${API_VERSION}/onboarding/community`,
+                profile: `POST /api/${API_VERSION}/onboarding/profile`,
+                complete: `POST /api/${API_VERSION}/onboarding/complete`
             }
         }
     });
 });
-
 
 // Static files
 app.use('/assets', express.static(path.join(__dirname, '..', 'assets')));
@@ -239,22 +280,28 @@ app.get('/favicon.png', (req, res) => {
 
 // 404 handler
 app.use('*', (req, res) => {
-    logger.warn(`404 - Route not found: ${req.originalUrl}`);
+    logger.warn(`404 - Route not found: ${req.originalUrl}, Request ID: ${req.id}`);
     res.status(404).json({
         status: 'FAILED',
-        message: `Route ${req.originalUrl} not found`
+        message: `Route ${req.originalUrl} not found`,
+        requestId: req.id
     });
 });
 
 // Global error handler
 app.use((err, req, res, next) => {
-
     // Check if headers have already been sent
     if (res.headersSent) {
         return next(err);
     }
+
     // Set CORS headers for error responses
-    const allowedOrigins = ['https://circlemate-spark-landing-mbh1.vercel.app', 'http://localhost:8080', 'http://localhost:3000', 'https://www.mycirclemate.com'];
+    const allowedOrigins = [
+        'https://circlemate-spark-landing-mbh1.vercel.app', 
+        'http://localhost:8080', 
+        'http://localhost:3000', 
+        'https://www.mycirclemate.com'
+    ];
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
@@ -268,6 +315,7 @@ app.use((err, req, res, next) => {
         url: req.url,
         method: req.method,
         ip: req.ip,
+        requestId: req.id,
         timestamp: new Date().toISOString()
     });
 
@@ -303,10 +351,17 @@ app.use((err, req, res, next) => {
         err.message = 'Token has expired';
     }
 
+    // Network errors
+    if (err.isNetworkError || err.code === 'NETWORK_UNAVAILABLE') {
+        err.statusCode = 503;
+        err.message = 'Network connection error. Please check your internet connection and try again.';
+    }
+
     // Send error response
     res.status(err.statusCode).json({
         status: err.status,
         message: err.message,
+        requestId: req.id,
         ...(isDevelopment && { 
             stack: err.stack,
             error: err 
@@ -354,21 +409,47 @@ process.on('uncaughtException', (error) => {
     gracefulShutdown('UNCAUGHT_EXCEPTION');
 });
 
+// Database connection with retry logic
+const connectWithRetry = async () => {
+    const maxRetries = 5;
+    let retries = 0;
+    
+    const mongoOptions = {
+        autoIndex: true,
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+    };
+
+    while (retries < maxRetries) {
+        try {
+            await mongoose.connect(dbAltHost, mongoOptions);
+            logger.info('MongoDB connected successfully');
+            
+            // Setup network error handler for mongoose
+            mongooseNetworkErrorHandler(mongoose);
+            
+            break;
+        } catch (err) {
+            retries++;
+            logger.error(`MongoDB connection attempt ${retries} failed:`, err);
+            
+            if (retries === maxRetries) {
+                throw err;
+            }
+            
+            logger.info(`Retrying in 5 seconds... (${maxRetries - retries} attempts remaining)`);
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+    }
+};
+
 // Database connection and server startup
 const startServer = async () => {
     try {
-        logger.info('Connecting to MongoDB...');
+        logger.info('Starting application...');
         
-        // MongoDB connection options
-        const mongoOptions = {
-            autoIndex: true,
-            serverSelectionTimeoutMS: 5000,
-            socketTimeoutMS: 45000,
-        };
-
-        await mongoose.connect(dbAltHost, mongoOptions);
-        
-        logger.info('Connected to MongoDB successfully');
+        // Connect to database with retry
+        await connectWithRetry();
 
         // MongoDB connection event handlers
         mongoose.connection.on('error', (error) => {
@@ -415,6 +496,7 @@ const startServer = async () => {
             logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
             logger.info(`Database: Connected to ${mongoose.connection.name}`);
             logger.info(`Process ID: ${process.pid}`);
+            logger.info(`API Version: ${API_VERSION}`);
         });
 
         // Server error handler

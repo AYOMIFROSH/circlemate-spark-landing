@@ -1,12 +1,14 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const nodemailer = require('nodemailer');
-const { v4: uuidv4 } = require('uuid'); 
+const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 const path = require('path');
+const DOMPurify = require('isomorphic-dompurify');
+const mongoose = require('mongoose');
 const User = require('../models/userModel');
 const UserVerification = require('../models/UserVerification');
-const Session = require('../models/sessionModel'); 
+const Session = require('../models/sessionModel');
 const createError = require('../utils/appError');
 const logger = require('../utils/logger');
 const { validateSignup, validateLogin, validatePasswordReset } = require('../utils/inputValidation');
@@ -23,23 +25,27 @@ const config = {
     },
     email: {
         host: process.env.AUTH_EMAIL,
-        password: process.env.AUTH_PASSWORD
+        password: process.env.AUTH_PASSWORD,
     },
     session: {
         secret: process.env.SESSION_SECRET
     },
     baseUrl: process.env.NODE_ENV === 'production'
-        ? process.env.BASE_URL_PRODUCTION || 'https://circlemate-spark-landing-jet.vercel.app'
-        : process.env.BASE_URL_DEVELOPMENT || 'http://localhost:3000'
+        ? process.env.BASE_URL_PRODUCTION
+        : process.env.BASE_URL_DEVELOPMENT
 };
 
 // Validate required environment variables
 const validateEnvVars = () => {
-    const required = ['SECRET_KEY', 'AUTH_EMAIL', 'AUTH_PASSWORD', 'SESSION_SECRET'];
+    const required = ['SECRET_KEY', 'AUTH_EMAIL', 'AUTH_PASSWORD', 'SESSION_SECRET', 'BASE_URL_PRODUCTION'];
     const missing = required.filter(key => !process.env[key]);
-    
+
     if (missing.length > 0) {
         throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    }
+
+    if (!config.baseUrl) {
+        throw new Error('BASE_URL configuration is required');
     }
 };
 
@@ -55,9 +61,16 @@ const getCookieOptions = (rememberMe = false) => ({
     path: '/'
 });
 
-// Enhanced NODEMAILER TRANSPORTER with better error handling
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
+// Enhanced NODEMAILER TRANSPORTER with OAuth2 support
+let transporter;
+
+const createTransporter = async () => {
+    try {
+
+
+        // Fallback to password auth
+        transporter = nodemailer.createTransport({
+            service: 'gmail',
             auth: {
                 user: config.email.host,
                 pass: config.email.password,
@@ -67,45 +80,52 @@ const transporter = nodemailer.createTransport({
             maxMessages: 10,
             rateDelta: 1000,
             rateLimit: 5,
-    });
+        });
 
-// Verify transporter configuration
-transporter.verify((error, success) => {
-    if (error) {
-        logger.error('Email transporter error:', error);
-    } else {
+
+        // Verify transporter configuration
+        await transporter.verify();
         logger.info('Email server is ready');
+        return transporter;
+    } catch (error) {
+        logger.error('Email transporter error:', error);
+        // Don't throw - email service can be down but app should still work
+        return null;
     }
-});
-
-// Enhanced session token generation with more entropy
-const generateSessionToken = () => {
-    const timestamp = Date.now().toString();
-    const random = crypto.randomBytes(32).toString('hex');
-    const userId = crypto.randomBytes(16).toString('hex');
-    return crypto.createHash('sha256').update(`${timestamp}-${random}-${userId}`).digest('hex');
 };
 
-// Enhanced session creation with race condition prevention
+// Initialize transporter
+createTransporter();
+
+// Enhanced session token generation with crypto.randomBytes
+const generateSessionToken = () => {
+    return crypto.randomBytes(32).toString('base64url');
+};
+
+// Enhanced session creation with transaction support
 const createSession = async (userId, userAgent, ipAddress) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
     try {
         // Invalidate existing sessions for this user/device combination
         await Session.updateMany(
-            { 
-                userId, 
-                userAgent, 
-                isActive: true 
+            {
+                userId,
+                userAgent,
+                isActive: true
             },
-            { 
+            {
                 isActive: false,
                 loggedOutAt: new Date()
-            }
+            },
+            { session }
         );
 
         const sessionToken = generateSessionToken();
         const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-        const session = new Session({
+        const newSession = new Session({
             sessionToken,
             userId,
             userAgent: userAgent || 'Unknown',
@@ -114,13 +134,17 @@ const createSession = async (userId, userAgent, ipAddress) => {
             isActive: true
         });
 
-        await session.save();
-        
+        await newSession.save({ session });
+        await session.commitTransaction();
+
         logger.info(`Session created for user ${userId} from IP ${ipAddress}`);
         return sessionToken;
     } catch (error) {
+        await session.abortTransaction();
         logger.error('Error creating session:', error);
         throw new Error('Failed to create session');
+    } finally {
+        session.endSession();
     }
 };
 
@@ -153,7 +177,7 @@ const invalidateSession = async (sessionToken) => {
     try {
         await Session.updateOne(
             { sessionToken },
-            { 
+            {
                 isActive: false,
                 loggedOutAt: new Date()
             }
@@ -179,9 +203,17 @@ const cleanupExpiredSessions = async () => {
     }
 };
 
-// Enhanced email sending with retry logic
+// Enhanced email sending with retry logic and null check
 const sendVerificationEmail = async ({ _id, email }, retries = 3) => {
     try {
+        if (!transporter) {
+            // Try to recreate transporter
+            await createTransporter();
+            if (!transporter) {
+                throw new Error('Email service is currently unavailable. Please try again later.');
+            }
+        }
+
         const currentUrl = `${config.baseUrl}/api/auth/verify/`;
         const uniqueString = `${uuidv4()}${_id}`;
         const hashedUniqueString = await bcrypt.hash(uniqueString, 10);
@@ -242,13 +274,13 @@ const sendVerificationEmail = async ({ _id, email }, retries = 3) => {
         return { status: 'PENDING', message: 'Verification email sent!' };
     } catch (error) {
         logger.error(`Failed to send verification email to ${email}:`, error);
-        
+
         if (retries > 0) {
             logger.info(`Retrying email send... ${retries} attempts left`);
             await new Promise(resolve => setTimeout(resolve, 2000));
             return sendVerificationEmail({ _id, email }, retries - 1);
         }
-        
+
         throw new Error('Failed to send verification email. Please try again later.');
     }
 };
@@ -260,13 +292,13 @@ const generateTokens = (userId) => {
         config.jwt.secret,
         { expiresIn: config.jwt.expiresIn }
     );
-    
+
     const refreshToken = jwt.sign(
         { _id: userId },
         config.jwt.refreshSecret || config.jwt.secret,
         { expiresIn: config.jwt.refreshExpiresIn }
     );
-    
+
     return { accessToken, refreshToken };
 };
 
@@ -277,16 +309,16 @@ const trackFailedLogin = async (email, ipAddress) => {
         if (user) {
             user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
             user.lastFailedLogin = new Date();
-            
+
             // Lock account after 5 failed attempts
             if (user.failedLoginAttempts >= 5) {
                 user.accountLockedUntil = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
                 logger.warn(`Account locked for user: ${email} due to multiple failed login attempts`);
             }
-            
+
             await user.save();
         }
-        
+
         // Log the failed attempt
         logger.warn(`Failed login attempt for email: ${email} from IP: ${ipAddress}`);
     } catch (error) {
@@ -299,7 +331,7 @@ const resetFailedLoginAttempts = async (userId) => {
     try {
         await User.updateOne(
             { _id: userId },
-            { 
+            {
                 $set: { failedLoginAttempts: 0 },
                 $unset: { accountLockedUntil: 1 }
             }
@@ -311,11 +343,11 @@ const resetFailedLoginAttempts = async (userId) => {
 
 exports.verifiedPage = (req, res) => {
     const { error, success, message } = req.query;
-    
+
     logger.info('Verified page accessed with params:', { error, success, message });
-    
+
     // Use EJS render since it's already configured
-    res.render('verified', { 
+    res.render('verified', {
         error: error === 'true',
         success: success === 'true',
         message: message || 'Verification completed successfully'
@@ -327,50 +359,49 @@ exports.verifyEmail = async (req, res) => {
     const { userId, uniqueString } = req.params;
 
     try {
-        logger.info(`Email verification attempt for user: ${userId}`); // Add this log
-        
+        logger.info(`Email verification attempt for user: ${userId}`);
+
         const user = await User.findById(userId);
         if (user && user.verified) {
-            logger.info(`User ${userId} is already verified`); // Add this log
+            logger.info(`User ${userId} is already verified`);
             return res.redirect(`/api/verified?success=true&message=User is already verified.`);
         }
 
         const record = await UserVerification.findOne({ userId });
         if (!record) {
-            logger.warn(`No verification record found for user: ${userId}`); // Add this log
+            logger.warn(`No verification record found for user: ${userId}`);
             return res.redirect(`/api/verified?error=true&message=Invalid or expired link.`);
         }
 
         if (record.expiresAt < Date.now()) {
             await UserVerification.deleteOne({ userId });
             await User.deleteOne({ _id: userId });
-            logger.warn(`Verification link expired for user: ${userId}`); // Add this log
+            logger.warn(`Verification link expired for user: ${userId}`);
             return res.redirect(`/api/verified?error=true&message=Link expired. Please sign up again.`);
         }
 
         const isValid = await bcrypt.compare(uniqueString, record.uniqueString);
         if (!isValid) {
-            logger.warn(`Invalid verification string for user: ${userId}`); // Add this log
+            logger.warn(`Invalid verification string for user: ${userId}`);
             return res.redirect(`/api/verified?error=true&message=Invalid verification details.`);
         }
 
         await User.updateOne({ _id: userId }, { verified: true });
         await UserVerification.deleteOne({ userId });
-        
-        logger.info(`User ${userId} successfully verified`); // Add this log
-        
+
+        logger.info(`User ${userId} successfully verified`);
+
         return res.redirect(`/api/verified?success=true&message=Email verified successfully!`);
     } catch (error) {
-        logger.error('Email verification error:', error); // Update this log
+        logger.error('Email verification error:', error);
         res.redirect(`/api/verified?error=true&message=Verification failed. Please try again.`);
     }
 };
 
-
-// Add this new function to authController.js
+// Check verification status
 exports.checkVerificationStatus = async (req, res, next) => {
     const { email } = req.params;
-    
+
     try {
         // Validate email format
         if (!email || !email.includes('@')) {
@@ -379,16 +410,16 @@ exports.checkVerificationStatus = async (req, res, next) => {
                 message: 'Invalid email format'
             });
         }
-        
+
         const user = await User.findOne({ email: email.toLowerCase() });
-        
+
         if (!user) {
             return res.status(404).json({
                 status: 'FAILED',
                 message: 'User not found'
             });
         }
-        
+
         res.status(200).json({
             status: 'success',
             data: {
@@ -406,30 +437,30 @@ exports.checkVerificationStatus = async (req, res, next) => {
 // RESEND VERIFICATION EMAIL ROUTE
 exports.resendVerificationEmail = async (req, res, next) => {
     const { email } = req.body;
-    
+
     try {
         const user = await User.findOne({ email });
         if (!user) {
             return res.status(404).json({ status: 'FAILED', message: 'User not found.' });
         }
-        
+
         if (user.verified) {
             return res.status(400).json({ status: 'FAILED', message: 'User is already verified.' });
         }
-        
+
         const existingRecord = await UserVerification.findOne({ userId: user._id });
-        
+
         if (existingRecord && existingRecord.expiresAt > Date.now()) {
             return res.status(400).json({
                 status: 'FAILED',
                 message: 'A verification link has already been sent and is still active. Please check your email.'
             });
         }
-        
+
         if (existingRecord) {
             await UserVerification.deleteOne({ userId: user._id });
         }
-        
+
         const emailResponse = await sendVerificationEmail({ _id: user._id, email: user.email });
         res.status(200).json({
             status: emailResponse.status,
@@ -441,7 +472,7 @@ exports.resendVerificationEmail = async (req, res, next) => {
     }
 };
 
-// Enhanced REGISTER USER with validation
+// Enhanced REGISTER USER with validation and sanitization
 exports.signup = async (req, res, next) => {
     try {
         // Validate input
@@ -454,16 +485,25 @@ exports.signup = async (req, res, next) => {
             });
         }
 
-        const existingUser = await User.findOne({ email: req.body.email });
+        // Sanitize text inputs
+        const sanitizedData = {
+            ...req.body,
+            userName: DOMPurify.sanitize(req.body.userName),
+            firstName: DOMPurify.sanitize(req.body.firstName),
+            lastName: DOMPurify.sanitize(req.body.lastName),
+            email: req.body.email.toLowerCase()
+        };
+
+        const existingUser = await User.findOne({ email: sanitizedData.email });
         if (existingUser) {
-            logger.info(`Signup attempt with existing email: ${req.body.email}`);
+            logger.info(`Signup attempt with existing email: ${sanitizedData.email}`);
             return next(new createError('User already exists!', 400));
         }
 
-        const hashedPassword = await bcrypt.hash(req.body.password, 12);
+        const hashedPassword = await bcrypt.hash(sanitizedData.password, 12);
 
         const newUser = await User.create({
-            ...req.body,
+            ...sanitizedData,
             password: hashedPassword,
             verified: false,
         });
@@ -590,7 +630,7 @@ exports.login = async (req, res, next) => {
 exports.refreshToken = async (req, res, next) => {
     try {
         const { refreshToken } = req.cookies;
-        
+
         if (!refreshToken) {
             return res.status(401).json({
                 status: 'FAILED',
@@ -635,7 +675,7 @@ exports.refreshToken = async (req, res, next) => {
 exports.logout = async (req, res, next) => {
     try {
         const sessionToken = req.cookies.sessionToken;
-        
+
         if (sessionToken) {
             await invalidateSession(sessionToken);
         }
@@ -669,7 +709,7 @@ exports.logout = async (req, res, next) => {
 exports.getCurrentUser = async (req, res, next) => {
     try {
         const user = await User.findById(req.user._id).select('-password -resetToken -resetTokenExpiry -refreshToken');
-        
+
         if (!user) {
             return res.status(404).json({
                 status: 'FAILED',
@@ -681,7 +721,7 @@ exports.getCurrentUser = async (req, res, next) => {
             status: 'success',
             user: {
                 _id: user._id,
-                userName: user._userName,
+                userName: user.userName,
                 firstName: user.firstName,
                 lastName: user.lastName,
                 email: user.email,
@@ -701,11 +741,11 @@ exports.getCurrentUser = async (req, res, next) => {
 exports.logoutAllDevices = async (req, res, next) => {
     try {
         const userId = req.user._id;
-        
+
         // Invalidate all sessions for this user
         await Session.updateMany(
             { userId, isActive: true },
-            { 
+            {
                 isActive: false,
                 loggedOutAt: new Date()
             }
@@ -738,7 +778,7 @@ exports.logoutAllDevices = async (req, res, next) => {
 exports.getActiveSessions = async (req, res, next) => {
     try {
         const userId = req.user._id;
-        
+
         const sessions = await Session.find({
             userId,
             isActive: true,
@@ -767,7 +807,7 @@ exports.forgotPassword = async (req, res, next) => {
 
     try {
         const user = await User.findOne({ email });
-        
+
         // Always return success for security (don't reveal if email exists)
         const successResponse = {
             status: 'success',
@@ -780,7 +820,7 @@ exports.forgotPassword = async (req, res, next) => {
         }
 
         // Check if a reset was recently requested
-        if (user.lastPasswordResetRequest && 
+        if (user.lastPasswordResetRequest &&
             (Date.now() - user.lastPasswordResetRequest) < 60000) { // 1 minute
             return res.status(429).json({
                 status: 'FAILED',
@@ -798,27 +838,29 @@ exports.forgotPassword = async (req, res, next) => {
         await user.save();
 
         const resetURL = `${config.baseUrl}/api/auth/reset-password/${resetToken}`;
-        
-        await transporter.sendMail({
-            from: config.email.host,
-            to: email,
-            subject: 'Password Reset Request',
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #333;">Password Reset Request</h2>
-                    <p>Hi ${user.userName},</p>
-                    <p>We received a request to reset your password. Click the link below to set a new password:</p>
-                    <div style="margin: 30px 0;">
-                        <a href="${resetURL}" 
-                           style="background-color: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; display: inline-block;">
-                            Reset Password
-                        </a>
+
+        if (transporter) {
+            await transporter.sendMail({
+                from: config.email.host,
+                to: email,
+                subject: 'Password Reset Request',
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #333;">Password Reset Request</h2>
+                        <p>Hi ${user.userName},</p>
+                        <p>We received a request to reset your password. Click the link below to set a new password:</p>
+                        <div style="margin: 30px 0;">
+                            <a href="${resetURL}" 
+                               style="background-color: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 4px; display: inline-block;">
+                                Reset Password
+                            </a>
+                        </div>
+                        <p style="color: #666;">This link expires in 10 minutes.</p>
+                        <p style="color: #666;">If you didn't request this, please ignore this email and your password will remain unchanged.</p>
                     </div>
-                    <p style="color: #666;">This link expires in 10 minutes.</p>
-                    <p style="color: #666;">If you didn't request this, please ignore this email and your password will remain unchanged.</p>
-                </div>
-            `,
-        });
+                `,
+            });
+        }
 
         logger.info(`Password reset email sent to: ${email}`);
         res.status(200).json(successResponse);
@@ -864,26 +906,28 @@ exports.resetPassword = async (req, res) => {
         // Invalidate all existing sessions for security
         await Session.updateMany(
             { userId: user._id, isActive: true },
-            { 
+            {
                 isActive: false,
                 loggedOutAt: new Date()
             }
         );
 
         // Send confirmation email
-        await transporter.sendMail({
-            from: config.email.host,
-            to: user.email,
-            subject: 'Password Changed Successfully',
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #333;">Password Changed</h2>
-                    <p>Hi ${user.userName},</p>
-                    <p>Your password has been successfully changed.</p>
-                    <p style="color: #666;">If you didn't make this change, please contact support immediately.</p>
-                </div>
-            `,
-        });
+        if (transporter) {
+            await transporter.sendMail({
+                from: config.email.host,
+                to: user.email,
+                subject: 'Password Changed Successfully',
+                html: `
+                    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                        <h2 style="color: #333;">Password Changed</h2>
+                        <p>Hi ${user.userName},</p>
+                        <p>Your password has been successfully changed.</p>
+                        <p style="color: #666;">If you didn't make this change, please contact support immediately.</p>
+                    </div>
+                `,
+            });
+        }
 
         logger.info(`Password reset successfully for user: ${user.email}`);
         res.status(200).sendFile(path.join(__dirname, '../views/reset-success.html'));

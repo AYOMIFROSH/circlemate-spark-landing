@@ -4,6 +4,9 @@ const Session = require('../models/sessionModel');
 const logger = require('../utils/logger');
 require('dotenv').config();
 
+// User-based rate limiting
+const userRateLimiter = new Map();
+
 // Enhanced authentication middleware that supports both JWT and session tokens
 exports.authenticate = async (req, res, next) => {
     try {
@@ -40,7 +43,7 @@ exports.authenticate = async (req, res, next) => {
                     user = await User.findById(decoded._id).select('-password -resetToken -resetTokenExpiry -refreshToken');
                     authMethod = 'jwt';
                 } catch (jwtError) {
-                    logger.warn('JWT verification failed:', jwtError.message);
+                    logger.warn(`JWT verification failed: ${jwtError.message}, Request ID: ${req.id}`);
                 }
             }
         }
@@ -48,7 +51,8 @@ exports.authenticate = async (req, res, next) => {
         if (!user) {
             return res.status(401).json({ 
                 status: 'FAILED',
-                message: 'Authentication failed! Please log in.' 
+                message: 'Authentication failed! Please log in.',
+                requestId: req.id
             });
         }
 
@@ -56,7 +60,8 @@ exports.authenticate = async (req, res, next) => {
         if (!user.verified) {
             return res.status(401).json({
                 status: 'FAILED',
-                message: 'Account not verified. Please verify your email.'
+                message: 'Account not verified. Please verify your email.',
+                requestId: req.id
             });
         }
 
@@ -64,7 +69,8 @@ exports.authenticate = async (req, res, next) => {
         if (user.accountLockedUntil && user.accountLockedUntil > new Date()) {
             return res.status(423).json({
                 status: 'FAILED',
-                message: 'Account is temporarily locked due to multiple failed login attempts.'
+                message: 'Account is temporarily locked due to multiple failed login attempts.',
+                requestId: req.id
             });
         }
 
@@ -72,13 +78,14 @@ exports.authenticate = async (req, res, next) => {
         req.user = user;
         req.authMethod = authMethod;
         
-        logger.debug(`Authenticated user: ${user.email} via ${authMethod}`);
+        logger.debug(`Authenticated user: ${user.email} via ${authMethod}, Request ID: ${req.id}`);
         next();
     } catch (error) {
-        logger.error('Authentication error:', error);
+        logger.error(`Authentication error: ${error.message}, Request ID: ${req.id}`);
         return res.status(401).json({ 
             status: 'FAILED',
-            message: 'Authentication failed!' 
+            message: 'Authentication failed!',
+            requestId: req.id
         });
     }
 };
@@ -96,10 +103,11 @@ exports.verifyAdmin = async (req, res, next) => {
 
         // Check if user has admin role
         if (req.user.role !== 'admin' && req.user.role !== 'Admin') {
-            logger.warn(`Non-admin user ${req.user.email} attempted to access admin route`);
+            logger.warn(`Non-admin user ${req.user.email} attempted to access admin route, Request ID: ${req.id}`);
             return res.status(403).json({ 
                 status: 'FAILED',
-                message: 'Forbidden: Admin access required' 
+                message: 'Forbidden: Admin access required',
+                requestId: req.id
             });
         }
 
@@ -107,7 +115,8 @@ exports.verifyAdmin = async (req, res, next) => {
     } catch (error) {
         return res.status(401).json({ 
             status: 'FAILED',
-            message: 'Authentication failed!' 
+            message: 'Authentication failed!',
+            requestId: req.id
         });
     }
 };
@@ -190,12 +199,13 @@ exports.loginRateLimit = (() => {
         // Check if max attempts exceeded
         if (userAttempts.count >= MAX_ATTEMPTS) {
             const remainingTime = Math.ceil((WINDOW_MS - (now - userAttempts.firstAttempt)) / 1000);
-            logger.warn(`Rate limit exceeded for IP: ${ip}`);
+            logger.warn(`Rate limit exceeded for IP: ${ip}, Request ID: ${req.id}`);
             
             return res.status(429).json({
                 status: 'FAILED',
                 message: 'Too many login attempts. Please try again later.',
-                retryAfter: remainingTime
+                retryAfter: remainingTime,
+                requestId: req.id
             });
         }
 
@@ -204,6 +214,53 @@ exports.loginRateLimit = (() => {
         next();
     };
 })();
+
+// User-based rate limiting middleware
+exports.userBasedRateLimit = (maxRequests = 30, windowMs = 60000) => {
+    // Cleanup old entries periodically
+    setInterval(() => {
+        const now = Date.now();
+        for (const [userId, data] of userRateLimiter.entries()) {
+            if (now > data.resetTime) {
+                userRateLimiter.delete(userId);
+            }
+        }
+    }, windowMs);
+
+    return (req, res, next) => {
+        if (!req.user) return next();
+        
+        const userId = req.user._id.toString();
+        const now = Date.now();
+        
+        if (!userRateLimiter.has(userId)) {
+            userRateLimiter.set(userId, { count: 1, resetTime: now + windowMs });
+            return next();
+        }
+        
+        const userLimits = userRateLimiter.get(userId);
+        if (now > userLimits.resetTime) {
+            userLimits.count = 1;
+            userLimits.resetTime = now + windowMs;
+            return next();
+        }
+        
+        if (userLimits.count >= maxRequests) {
+            const remainingTime = Math.ceil((userLimits.resetTime - now) / 1000);
+            logger.warn(`User rate limit exceeded for user: ${req.user.email}, Request ID: ${req.id}`);
+            
+            return res.status(429).json({
+                status: 'FAILED',
+                message: 'Too many requests. Please slow down.',
+                retryAfter: remainingTime,
+                requestId: req.id
+            });
+        }
+        
+        userLimits.count++;
+        next();
+    };
+};
 
 // CSRF protection middleware
 exports.csrfProtection = (req, res, next) => {
@@ -216,10 +273,11 @@ exports.csrfProtection = (req, res, next) => {
     const sessionCsrf = req.session?.csrfToken;
 
     if (!csrfToken || !sessionCsrf || csrfToken !== sessionCsrf) {
-        logger.warn(`CSRF token mismatch for ${req.method} ${req.path} from IP: ${req.ip}`);
+        logger.warn(`CSRF token mismatch for ${req.method} ${req.path} from IP: ${req.ip}, Request ID: ${req.id}`);
         return res.status(403).json({
             status: 'FAILED',
-            message: 'Invalid CSRF token'
+            message: 'Invalid CSRF token',
+            requestId: req.id
         });
     }
 
@@ -253,14 +311,14 @@ exports.refreshSession = async (req, res, next) => {
                     };
                     
                     res.cookie('sessionToken', sessionToken, cookieOptions);
-                    logger.debug(`Session extended for user: ${req.user.email}`);
+                    logger.debug(`Session extended for user: ${req.user.email}, Request ID: ${req.id}`);
                 }
             }
         }
         
         next();
     } catch (error) {
-        logger.error('Session refresh error:', error);
+        logger.error(`Session refresh error: ${error.message}, Request ID: ${req.id}`);
         next(); // Continue even if refresh fails
     }
 };
@@ -279,11 +337,14 @@ exports.requestLogger = (req, res, next) => {
             duration: `${duration}ms`,
             ip: req.ip || req.connection.remoteAddress,
             userAgent: req.get('User-Agent'),
-            user: req.user?.email || 'anonymous'
+            user: req.user?.email || 'anonymous',
+            requestId: req.id
         };
         
         if (res.statusCode >= 400) {
             logger.error('Request failed:', logData);
+        } else if (duration > 1000) { // Log slow requests
+            logger.warn('Slow request detected:', logData);
         } else {
             logger.info('Request completed:', logData);
         }
@@ -329,4 +390,67 @@ exports.paginate = (req, res, next) => {
     };
     
     next();
+};
+
+// Cache response middleware
+const responseCache = new Map();
+
+exports.cacheResponse = (duration = 300) => {
+    // Cleanup old cache entries periodically
+    setInterval(() => {
+        const now = Date.now();
+        for (const [key, value] of responseCache.entries()) {
+            if (value.expiry < now) {
+                responseCache.delete(key);
+            }
+        }
+    }, 60 * 1000); // Clean up every minute
+
+    return (req, res, next) => {
+        if (req.method !== 'GET') return next();
+        
+        const key = `${req.originalUrl}_${req.user?._id || 'anonymous'}`;
+        const cached = responseCache.get(key);
+        
+        if (cached && cached.expiry > Date.now()) {
+            logger.debug(`Returning cached response for: ${key}, Request ID: ${req.id}`);
+            return res.json(cached.data);
+        }
+        
+        const originalJson = res.json;
+        res.json = function(data) {
+            responseCache.set(key, {
+                data,
+                expiry: Date.now() + (duration * 1000)
+            });
+            originalJson.call(this, data);
+        };
+        
+        next();
+    };
+};
+
+// Validate request middleware
+exports.validateRequest = (schema) => {
+    return async (req, res, next) => {
+        try {
+            await schema.validateAsync(req.body, { 
+                abortEarly: false,
+                stripUnknown: true 
+            });
+            next();
+        } catch (error) {
+            const errors = error.details.map(detail => ({
+                field: detail.path.join('.'),
+                message: detail.message
+            }));
+            
+            return res.status(400).json({
+                status: 'FAILED',
+                message: 'Validation failed',
+                errors,
+                requestId: req.id
+            });
+        }
+    };
 };
