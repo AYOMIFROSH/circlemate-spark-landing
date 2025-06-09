@@ -35,16 +35,32 @@ const API_BASE =
 
 // Fetch wrapper: throw server-sent message if available
 const fetchWaitlist = async (): Promise<WaitlistEntry[]> => {
-  const res = await fetch(`${API_BASE}/api/v1/waitlist`);
-  const wrapper = await res.json();
-  if (!res.ok) {
-    const msg = wrapper.message || wrapper.error || "Failed to fetch waitlist";
-    throw new Error(msg);
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/waitlist`);
+    const wrapper = await res.json();
+    if (!res.ok) {
+      // Handle network/server errors with more detail
+      if (res.status === 503 && (wrapper.code === 'NETWORK_UNAVAILABLE' || (wrapper.message && wrapper.message.toLowerCase().includes('network connection error')))) {
+        throw new Error('Network connection error. Please check your internet connection and try again.');
+      }
+      const msg = wrapper.message || wrapper.error || `Failed to fetch waitlist (status ${res.status})`;
+      throw new Error(msg);
+    }
+    if (wrapper.status !== 'success') {
+      throw new Error(wrapper.message || 'Unknown error occurred');
+    }
+    return wrapper.data;
+  } catch (err: any) {
+    // Catch fetch/network errors
+    if (err.name === 'TypeError' && err.message && err.message.includes('Failed to fetch')) {
+      throw new Error('Unable to connect to the server. Please check your network.');
+    }
+    throw err;
   }
-  return wrapper.data;
 };
 
 const ADMIN_PASSCODE = "3820"; // You can change this or store in env
+const PAGE_SIZE = 20;
 
 const WaitlistDashboard: React.FC = () => {
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
@@ -53,32 +69,8 @@ const WaitlistDashboard: React.FC = () => {
   const [authorized, setAuthorized] = useState(false);
   const [passcode, setPasscode] = useState("");
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (!authorized) return;
-
-    const load = async () => {
-      try {
-        const data = await fetchWaitlist();
-        setEntries(data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    load();
-  }, [authorized]);
-
-  const handlePasscodeSubmit = () => {
-    if (passcode === ADMIN_PASSCODE) {
-      setAuthorized(true);
-      setError("");
-    } else {
-      setError("Incorrect passcode.");
-    }
-  };
+  const [page, setPage] = useState(1);
+  const [isSlowNetwork, setIsSlowNetwork] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -89,6 +81,46 @@ const WaitlistDashboard: React.FC = () => {
         e.email.toLowerCase().includes(q)
     );
   }, [entries, query]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
+
+  useEffect(() => {
+    if (!authorized) return;
+
+    let slowNetworkTimer: NodeJS.Timeout;
+    const load = async () => {
+      setLoading(true);
+      setIsSlowNetwork(false);
+      slowNetworkTimer = setTimeout(() => setIsSlowNetwork(true), 2000); // 2s threshold
+      try {
+        const data = await fetchWaitlist();
+        setEntries(data);
+        setError("");
+      } catch (err: any) {
+        setError(err.message || "Failed to fetch waitlist");
+      } finally {
+        setLoading(false);
+        clearTimeout(slowNetworkTimer);
+      }
+    };
+
+    load();
+    return () => clearTimeout(slowNetworkTimer);
+  }, [authorized]);
+
+  const handlePasscodeSubmit = () => {
+    if (passcode === ADMIN_PASSCODE) {
+      setAuthorized(true);
+      setError("");
+    } else {
+      setError("Incorrect passcode.");
+    }
+  };
 
   const downloadCSV = () => {
     const header = ["First Name", "Last Name", "Email", "Interest", "Date"].join(",");
@@ -144,7 +176,10 @@ const WaitlistDashboard: React.FC = () => {
               <Input
                 placeholder="Search by name or email…"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(1); // Reset to first page on search
+                }}
                 className="max-w-xs"
               />
               <Button
@@ -159,9 +194,19 @@ const WaitlistDashboard: React.FC = () => {
           </div>
         </CardHeader>
         <CardContent>
+          {isSlowNetwork && loading && (
+            <div className="flex items-center justify-center py-2">
+              <span className="text-yellow-600 font-medium">Your network is slow...</span>
+            </div>
+          )}
           {loading ? (
             <div className="flex items-center justify-center py-16">
               <Loader2 className="animate-spin w-6 h-6 text-gray-500" />
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-2">
+              <span className="text-red-600 font-medium">{error}</span>
+              <Button onClick={() => window.location.reload()} variant="outline">Retry</Button>
             </div>
           ) : (
             <div className="overflow-x-auto border rounded-lg">
@@ -177,16 +222,16 @@ const WaitlistDashboard: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.length === 0 ? (
+                  {paginated.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center py-10 text-gray-500">
                         No submissions found.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filtered.map((entry, i) => (
+                    paginated.map((entry, i) => (
                       <TableRow key={entry.id} className="hover:bg-gray-50">
-                        <TableCell>{i + 1}</TableCell>
+                        <TableCell>{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                         <TableCell>{entry.firstName}</TableCell>
                         <TableCell>{entry.lastName}</TableCell>
                         <TableCell>{entry.email}</TableCell>
@@ -203,6 +248,30 @@ const WaitlistDashboard: React.FC = () => {
                   )}
                 </TableBody>
               </Table>
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex justify-end items-center gap-2 mt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm text-gray-600">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page === totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
