@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
@@ -7,9 +6,9 @@ import WaitlistModal from './WaitlistModal';
 const Hero: React.FC = () => {
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
   return (
-    <section className="pt-24 pb-16 md:pt-32 md:pb-24">
-      <div className="container-custom">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
+    <section className="pt-24 pb-16 md:pt-32 md:pb-24 w-full overflow-x-hidden">
+      <div className="container-custom mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 items-center w-full">
           <div className="order-2 md:order-1">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 text-navy leading-tight">
               Meaningful <span className="text-teal">Connections</span> Within Your Trusted Circle
@@ -18,12 +17,13 @@ const Hero: React.FC = () => {
               Connect with like-minded individuals in your community for friendship, romance, or professional networking - all within trusted groups you already belong to.
             </p>
             <div className="flex flex-col sm:flex-row gap-4">
-              <button 
-                  onClick={() => setIsWaitlistModalOpen(true)}
-                  className="btn-primary flex items-center justify-center gap-2"
-                >
-                  Join Waitlist <ArrowRight size={18} />
-                </button>
+              <button
+                type="button"
+                onClick={() => setIsWaitlistModalOpen(true)}
+                className="btn-primary flex items-center justify-center gap-2"
+              >
+                Join Waitlist <ArrowRight size={18} />
+              </button>
               <Link to="/#how-it-works" className="btn-outline flex items-center justify-center">
                 Learn More
               </Link>
