@@ -1,529 +1,439 @@
 # CircleMate API Documentation
 
-## 🚀 Getting Started
+**Base URL:**  
+- Development: `http://localhost:3000/api/v1`
+- Production: `https://<your-production-domain>/api/v1`
 
-### Base URL
-```
-Development: http://localhost:3000/api/v1
-Production: https://your-domain.com/api/v1
-```
+## Authentication
 
-### Authentication
-All protected routes require a JWT token in the Authorization header:
-```
-Authorization: Bearer YOUR_JWT_TOKEN
-```
+All endpoints that require authentication expect a valid JWT token in the `Authorization` header as `Bearer <token>`.
 
-## 📱 Client Integration Guide
+---
 
-### Step 1: Initial Setup
-```javascript
-// Configure your API client
-const API_BASE = 'http://localhost:3000/api/v1';
+## Endpoints
 
-// Add token to all requests
-const apiCall = async (endpoint, options = {}) => {
-  const token = localStorage.getItem('token');
-  
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...options.headers
-    }
-  });
-  
-  const data = await response.json();
-  
-  if (!response.ok) {
-    throw data;
-  }
-  
-  return data;
-};
-```
+### Auth
 
-## 🔐 Authentication Flow
+#### Signup
 
-### 1. Sign Up
-```javascript
-// POST /api/v1/auth/signup
-const signup = async (userData) => {
-  const response = await apiCall('/auth/signup', {
-    method: 'POST',
-    body: JSON.stringify({
-      userName: 'johndoe',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john@example.com',
-      password: 'SecurePass123' // Min 8 chars, must include letters & numbers
-    })
-  });
-  
-  // Response
+- **POST** `/api/v1/auth/signup`
+- **Body:**
+  ```json
   {
-    status: 'PENDING',
-    message: 'Verification email sent!',
-    user: {
-      _id: '123...',
-      email: 'john@example.com',
-      verified: false
-    }
+    "email": "user@example.com",
+    "password": "yourPassword",
+    "name": "User Name"
   }
-};
-```
+  ```
+- **Response:**
+  - `201 Created` on success
+  - `409 Conflict` if email already exists
 
-### 2. Check Verification Status
-```javascript
-// GET /api/v1/auth/check-verification/:email
-const checkVerification = async (email) => {
-  const response = await apiCall(`/auth/check-verification/${email}`);
-  
-  // Response
+#### Login
+
+- **POST** `/api/v1/auth/login`
+- **Body:**
+  ```json
   {
-    status: 'success',
-    data: {
-      email: 'john@example.com',
-      verified: true,
-      userId: '123...'
-    }
+    "email": "user@example.com",
+    "password": "yourPassword"
   }
-};
-```
+  ```
+- **Response:**
+  - `200 OK` with JWT token and user info
+  - `401 Unauthorized` on invalid credentials
 
-### 3. Login
-```javascript
-// POST /api/v1/auth/login
-const login = async (credentials) => {
-  const response = await apiCall('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify({
-      email: 'john@example.com',
-      password: 'SecurePass123',
-      rememberMe: false // Optional: extends session to 30 days
-    })
-  });
-  
-  // Response
+#### Logout
+
+- **POST** `/api/v1/auth/logout`
+- **Headers:** `Authorization: Bearer <token>`
+- **Response:** `200 OK`
+
+#### Email Verification
+
+- **GET** `/api/v1/auth/verify/:userId/:uniqueString`
+- **Response:**  
+  - `200 OK` on success
+  - `400/404` on failure
+
+#### Forgot Password
+
+- **POST** `/api/v1/auth/forgotpassword`
+- **Body:**
+  ```json
   {
-    status: 'success',
-    message: 'Logged in successfully.',
-    token: 'eyJhbGc...',
-    sessionToken: 'abc123...',
-    user: {
-      _id: '123...',
-      userName: 'johndoe',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john@example.com',
-      role: 'user',
-      verified: true
-    }
+    "email": "user@example.com"
   }
-  
-  // Save the token
-  localStorage.setItem('token', response.token);
-};
-```
+  ```
+- **Response:** `200 OK` (email sent if user exists)
 
-### 4. Resend Verification Email
-```javascript
-// POST /api/v1/auth/resend-verification
-const resendVerification = async (email) => {
-  await apiCall('/auth/resend-verification', {
-    method: 'POST',
-    body: JSON.stringify({ email })
-  });
-};
-```
+#### Reset Password
 
-### 5. Forgot Password
-```javascript
-// POST /api/v1/auth/forgotpassword
-const forgotPassword = async (email) => {
-  await apiCall('/auth/forgotpassword', {
-    method: 'POST',
-    body: JSON.stringify({ email })
-  });
-  
-  // Always returns success for security
+- **POST** `/api/v1/auth/reset-password/:token`
+- **Body:**
+  ```json
   {
-    status: 'success',
-    message: 'If an account exists with this email, a password reset link has been sent.'
+    "password": "newPassword"
   }
-};
-```
+  ```
+- **Response:** `200 OK` on success
 
-### 6. Get Current User
-```javascript
-// GET /api/v1/auth/me (Protected)
-const getCurrentUser = async () => {
-  const response = await apiCall('/auth/me');
-  
-  // Response
+#### Get Current User
+
+- **GET** `/api/v1/auth/me`
+- **Headers:** `Authorization: Bearer <token>`
+- **Response:** User info
+
+#### Get Sessions
+
+- **GET** `/api/v1/auth/sessions`
+- **Headers:** `Authorization: Bearer <token>`
+- **Response:** List of active sessions
+
+#### Refresh Token
+
+- **POST** `/api/v1/auth/refresh`
+- **Body:** `{ "refreshToken": "<token>" }`
+- **Response:** New JWT token
+
+---
+
+### Waitlist
+
+#### Submit to Waitlist
+
+- **POST** `/api/v1/waitlist/submit`
+- **Body:**
+  ```json
   {
-    status: 'success',
-    user: {
-      _id: '123...',
-      userName: 'johndoe',
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john@example.com',
-      role: 'user',
-      verified: true
-    }
+    "email": "user@example.com",
+    "name": "User Name"
   }
-};
-```
+  ```
+- **Response:** `201 Created`
 
-### 7. Logout
-```javascript
-// POST /api/v1/auth/logout (Protected)
-const logout = async () => {
-  await apiCall('/auth/logout', { method: 'POST' });
-  localStorage.removeItem('token');
-  window.location.href = '/login';
-};
-```
+#### Get All Waitlist Entries
 
-## 👤 Onboarding Flow
+- **GET** `/api/v1/waitlist`
+- **Headers:** (Admin only, may require authentication)
+- **Response:** List of waitlist entries
 
-The onboarding process is flexible - users can complete steps in any order or skip steps entirely.
+#### Export Waitlist
 
-### Check Onboarding Status
-```javascript
-// GET /api/v1/onboarding/status (Protected)
-const getOnboardingStatus = async () => {
-  const response = await apiCall('/onboarding/status');
-  
-  // Response
+- **GET** `/api/v1/waitlist/export`
+- **Response:** CSV file
+
+#### Waitlist Stats
+
+- **GET** `/api/v1/waitlist/stats`
+- **Response:** Waitlist statistics
+
+---
+
+### Onboarding
+
+All onboarding routes require authentication via `Authorization: Bearer <token>` header. Steps can be completed in any order unless otherwise specified.
+
+#### Get Onboarding Status
+- **GET** `/api/v1/onboarding/status`
+- **Response:** Onboarding progress and completed steps.
+
+#### Get Available Communities
+- **GET** `/api/v1/onboarding/communities`
+- **Response:** List of available communities for selection.
+
+#### Community Selection
+- **POST** `/api/v1/onboarding/community`
+- **Body:**
+  ```json
   {
-    status: 'success',
-    data: {
-      onboardingStep: 3,
-      onboardingCompleted: false,
-      profileCompleteness: 42,
-      profile: { /* user profile data */ }
-    }
+    "communityName": "string",
+    "interests": ["string", ...]
   }
-};
-```
+  ```
+- **Response:** Community selection saved.
 
-### Get Progress Summary
-```javascript
-// GET /api/v1/onboarding/progress (Protected)
-const getProgress = async () => {
-  const response = await apiCall('/onboarding/progress');
-  
-  // Response
+#### Profile Information
+- **POST** `/api/v1/onboarding/profile`
+- **Body:**
+  ```json
   {
-    status: 'success',
-    data: {
-      progress: {
-        community: true,
-        profile: true,
-        location: true,
-        personality: false,
-        preferences: false,
-        availability: false,
-        photos: false
+    "firstName": "string",
+    "lastName": "string",
+    "bio": "string",
+    // ...other profile fields
+  }
+  ```
+- **Response:** Profile info saved.
+
+#### Update Single Profile Field
+- **PATCH** `/api/v1/onboarding/profile/:field`
+- **Body:**
+  ```json
+  {
+    "<field>": "value"
+  }
+  ```
+- **Response:** Single profile field updated.
+
+#### Location
+- **POST** `/api/v1/onboarding/location`
+- **Body:**
+  ```json
+  {
+    "city": "string",
+    "country": "string",
+    // ...other location fields
+  }
+  ```
+- **Response:** Location info saved.
+
+#### Personality Traits
+- **POST** `/api/v1/onboarding/personality`
+- **Body:**
+  ```json
+  {
+    "personalityTraits": ["string", ...]
+  }
+  ```
+- **Response:** Personality info saved.
+
+#### Preferences
+- **POST** `/api/v1/onboarding/preferences`
+- **Body:**
+  ```json
+  {
+    "connectionPurposes": ["string", ...]
+  }
+  ```
+- **Response:** Preferences saved.
+
+#### Availability
+- **POST** `/api/v1/onboarding/availability`
+- **Body:**
+  ```json
+  {
+    "days": ["Monday", "Tuesday", ...],
+    "times": ["Morning", "Evening", ...]
+  }
+  ```
+- **Response:** Availability saved.
+
+#### Photo Upload
+- **POST** `/api/v1/onboarding/photos`
+- **Body:** FormData with photo file(s)
+- **Response:** Photo(s) uploaded.
+
+#### Delete Photo
+- **DELETE** `/api/v1/onboarding/photos/:photoId`
+- **Response:** Photo deleted.
+
+#### Complete Onboarding
+- **POST** `/api/v1/onboarding/complete`
+- **Response:** Onboarding marked as complete.
+
+#### Skip Onboarding
+- **POST** `/api/v1/onboarding/skip`
+- **Body:**
+  ```json
+  {
+    "reason": "string"
+  }
+  ```
+- **Response:** Onboarding forcibly completed (for special cases).
+
+#### Get Progress Summary
+- **GET** `/api/v1/onboarding/progress`
+- **Response:**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "progress": {
+        "community": true,
+        "profile": true,
+        "location": false,
+        "personality": false,
+        "preferences": false,
+        "availability": false,
+        "photos": false
       },
-      completed: 3,
-      total: 7,
-      percentage: 42,
-      canComplete: true // Minimum requirements met
+      "completed": 2,
+      "total": 7,
+      "percentage": 28,
+      "canComplete": false
     }
   }
-};
-```
+  ```
 
-### Step 1: Join Community
-```javascript
-// GET /api/v1/onboarding/communities
-const getCommunities = async () => {
-  const response = await apiCall('/onboarding/communities?search=tech&page=1&limit=20');
-  
-  // Response includes communities with pagination
-};
+#### Bulk Update Onboarding
+- **POST** `/api/v1/onboarding/bulk-update`
+- **Body:**
+  ```json
+  {
+    "community": { ... },
+    "profile": { ... },
+    "location": { ... },
+    "personality": { ... },
+    "preferences": { ... },
+    "availability": { ... }
+  }
+  ```
+- **Response:** Bulk update results for each step.
 
-// POST /api/v1/onboarding/community
-const joinCommunity = async (data) => {
-  // Option 1: By ID
-  await apiCall('/onboarding/community', {
-    method: 'POST',
-    body: JSON.stringify({ communityId: '123...' })
-  });
-  
-  // Option 2: By Invite Code
-  await apiCall('/onboarding/community', {
-    method: 'POST',
-    body: JSON.stringify({ inviteCode: 'TECH2024' })
-  });
-};
-```
+---
 
-### Step 2: Update Profile
-```javascript
-// POST /api/v1/onboarding/profile
-const updateProfile = async (profileData) => {
-  await apiCall('/onboarding/profile', {
-    method: 'POST',
-    body: JSON.stringify({
-      firstName: 'John',
-      lastName: 'Doe',
-      age: 25,
-      gender: 'male', // Options: male, female
-      bio: 'Software developer passionate about AI',
-      occupation: 'Software Engineer',
-      temperament: 'sanguine', // Options: choleric, sanguine, phlegmatic, melancholic
-      matchingStyle: 'flexible', // Options: flexible, strict, auto
-      ageRange: '26-35', // Options: 18-25, 26-35, 36-45, 46+
-      educationLevel: 'bachelor' // See docs for all options
-    })
-  });
-};
-```
+### Utility
 
-### Step 3: Set Location
-```javascript
-// POST /api/v1/onboarding/location
-const updateLocation = async (locationData) => {
-  await apiCall('/onboarding/location', {
-    method: 'POST',
-    body: JSON.stringify({
-      city: 'Lagos',
-      state: 'Lagos',
-      country: 'Nigeria',
-      postalCode: '100001',
-      latitude: 6.5244, // Optional
-      longitude: 3.3792 // Optional
-    })
-  });
-};
-```
+#### Health Check
 
-### Step 4: Select Personality Traits
-```javascript
-// POST /api/v1/onboarding/personality
-const updatePersonality = async (traits) => {
-  await apiCall('/onboarding/personality', {
-    method: 'POST',
-    body: JSON.stringify({
-      personalityTraits: ['creative', 'analytical', 'outgoing'] // Min 1, Max 5
-    })
-  });
-};
-```
+- **GET** `/health`
+- **Response:**
+  ```json
+  {
+    "uptime": 12345,
+    "message": "OK",
+    "timestamp": 1234567890,
+    "environment": "development",
+    "requestId": "uuid",
+    "checks": {
+      "database": "connected",
+      "memory": { ... },
+      "network": "connected"
+    }
+  }
+  ```
 
-### Step 5: Set Preferences
-```javascript
-// POST /api/v1/onboarding/preferences
-const updatePreferences = async (preferences) => {
-  await apiCall('/onboarding/preferences', {
-    method: 'POST',
-    body: JSON.stringify({
-      connectionPurposes: ['friendship', 'dating'],
-      interests: ['Photography', 'Travel', 'Technology'],
-      preferredAges: {
-        friendship: { min: 18, max: 100 },
-        dating: { min: 25, max: 35 }
-      }
-    })
-  });
-};
-```
+#### API Documentation
 
-### Step 6: Set Availability
-```javascript
-// POST /api/v1/onboarding/availability
-const updateAvailability = async (availability) => {
-  await apiCall('/onboarding/availability', {
-    method: 'POST',
-    body: JSON.stringify({
-      days: ['Saturday', 'Sunday'],
-      timePreferences: ['afternoon', 'evening']
-    })
-  });
-};
-```
+- **GET** `/api/docs`
+- **Response:** JSON with all endpoints and their paths
 
-### Step 7: Upload Photos (Optional)
-```javascript
-// POST /api/v1/onboarding/photos
-const uploadPhotos = async (files) => {
-  const formData = new FormData();
-  files.forEach(file => formData.append('photos', file));
-  
-  await fetch(`${API_BASE}/onboarding/photos`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${localStorage.getItem('token')}`
-    },
-    body: formData
-  });
-};
-```
+#### Static Assets
 
-### Complete Onboarding
-```javascript
-// POST /api/v1/onboarding/complete
-const completeOnboarding = async () => {
-  await apiCall('/onboarding/complete', {
-    method: 'POST',
-    body: JSON.stringify({})
-  });
-};
+- **GET** `/assets/<filename>`
+- **GET** `/favicon.ico` or `/favicon.png`
 
-// Or skip onboarding entirely
-const skipOnboarding = async () => {
-  await apiCall('/onboarding/skip', {
-    method: 'POST',
-    body: JSON.stringify({ reason: 'Want to explore first' })
-  });
-};
-```
+---
 
-## 📧 Waitlist (Public)
+## Success Response Format
 
-```javascript
-// POST /api/v1/waitlist/submit
-const joinWaitlist = async (data) => {
-  await apiCall('/waitlist/submit', {
-    method: 'POST',
-    body: JSON.stringify({
-      firstName: 'Jane',
-      lastName: 'Smith',
-      email: 'jane@example.com',
-      interest: 'friendship' // Options: friendship, romance, professional, all
-    })
-  });
-};
-```
+All successful responses (unless otherwise specified) follow this format:
 
-## ⚠️ Error Handling
-
-### Error Response Format
-```javascript
+```json
 {
-  status: 'FAILED',
-  message: 'Human-readable error message',
-  requestId: '550e8400-e29b-41d4-a716',
-  errors: [ // Only for validation errors
-    {
-      field: 'email',
-      message: 'Please provide a valid email address'
-    }
-  ]
+  "status": "success",
+  "message": "Description of the success",
+  "data": { /* optional, endpoint-specific */ },
+  "requestId": "uuid"
 }
 ```
 
-### Common Error Codes
-- `400` - Bad Request (validation failed)
-- `401` - Unauthorized (invalid/missing token)
-- `403` - Forbidden (insufficient permissions)
-- `404` - Not Found
-- `423` - Account Locked (too many failed attempts)
-- `429` - Too Many Requests (rate limited)
-- `503` - Service Unavailable (no internet/server down)
+- `status`: Always "success" for successful operations.
+- `message`: Human-readable message describing the result.
+- `data`: (optional) Contains the result or resource, if applicable.
+- `requestId`: Unique request identifier for tracing/debugging.
 
-### Network Error Handling
-```javascript
-// Handle network errors
-try {
-  await apiCall('/some-endpoint');
-} catch (error) {
-  if (error.error === 'NETWORK_UNAVAILABLE') {
-    alert('No internet connection. Please check your connection and try again.');
-  } else if (error.status === 'FAILED') {
-    alert(error.message);
-  }
+## Error Handling & Error Response Format
+
+All error responses follow this format:
+
+```json
+{
+  "status": "FAILED" | "error",
+  "message": "Error message",
+  "requestId": "uuid",
+  "stack": "..." // (only in development)
 }
 ```
 
-## 🔄 Token Refresh
+- `status`: "FAILED" or "error".
+- `message`: Human-readable error message.
+- `requestId`: Unique request identifier for tracing/debugging.
+- `stack`: (development only) Stack trace for debugging.
 
-When your token expires, the API will return a 401 error. You can either:
-1. Redirect to login
-2. Use the refresh endpoint (if you have a refresh token in cookies)
+### Common Error Codes & Messages
 
-```javascript
-// Handle 401 errors globally
-if (error.status === 401) {
-  localStorage.removeItem('token');
-  window.location.href = '/login';
+- `400 Bad Request`: Invalid input, validation errors.
+- `401 Unauthorized`: Missing or invalid authentication.
+- `403 Forbidden`: Not allowed to access resource.
+- `404 Not Found`: Resource or route does not exist.
+- `409 Conflict`: Duplicate resource (e.g., email already exists).
+- `429 Too Many Requests`: Rate limit exceeded.
+- `500 Internal Server Error`: Unexpected server error.
+- `503 Service Unavailable`: Network/database unavailable.
+
+### Validation Errors
+
+For validation errors (e.g., missing fields, invalid data), the message will be:
+
+```
+Validation error: <comma-separated list of issues>
+```
+
+### MongoDB Errors
+
+- Duplicate key: `<field> already exists` (409)
+- Validation error: `Validation error: ...` (400)
+
+### JWT Errors
+
+- `Invalid token` (401)
+- `Token has expired` (401)
+
+### Network/Connectivity Errors
+
+If the server cannot connect to the database or network, you will receive:
+
+```json
+{
+  "status": "error",
+  "message": "Network connection error. Please check your internet connection and try again.",
+  "requestId": "uuid"
 }
 ```
 
-## 📝 Quick Reference
+Or, for health checks:
 
-### Authentication Endpoints
-| Method | Endpoint | Auth Required | Description |
-|--------|----------|---------------|-------------|
-| POST | `/auth/signup` | No | Create account |
-| POST | `/auth/login` | No | Login |
-| GET | `/auth/check-verification/:email` | No | Check if email verified |
-| POST | `/auth/resend-verification` | No | Resend verification |
-| POST | `/auth/forgotpassword` | No | Request password reset |
-| GET | `/auth/me` | Yes | Get current user |
-| POST | `/auth/logout` | Yes | Logout |
-
-### Onboarding Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/onboarding/status` | Get onboarding status |
-| GET | `/onboarding/progress` | Get completion progress |
-| GET | `/onboarding/communities` | List communities |
-| POST | `/onboarding/community` | Join community |
-| POST | `/onboarding/profile` | Update profile |
-| POST | `/onboarding/location` | Set location |
-| POST | `/onboarding/personality` | Set personality traits |
-| POST | `/onboarding/preferences` | Set preferences |
-| POST | `/onboarding/availability` | Set availability |
-| POST | `/onboarding/photos` | Upload photos |
-| POST | `/onboarding/complete` | Complete onboarding |
-| POST | `/onboarding/skip` | Skip onboarding |
-
-### Field Options Reference
-```javascript
-// Gender
-['male', 'female']
-
-// Temperament
-['choleric', 'sanguine', 'phlegmatic', 'melancholic']
-
-// Matching Style
-['flexible', 'strict', 'auto']
-
-// Age Range
-['18-25', '26-35', '36-45', '46+']
-
-// Education Level
-[
-  'no_formal',        // No Formal Education
-  'primary',          // Primary School
-  'lower_secondary',  // Middle School
-  'upper_secondary',  // High School
-  'vocational',       // Technical Certification
-  'some_college',     // Some College
-  'associate',        // Associate Degree
-  'bachelor',         // Bachelor's Degree
-  'postgrad_diploma', // Postgraduate Diploma
-  'master',           // Master's Degree
-  'doctorate'         // PhD
-]
-
-// Personality Traits (max 5)
-['adventurous', 'analytical', 'creative', 'empathetic',
- 'organized', 'outgoing', 'relaxed', 'ambitious',
- 'thoughtful', 'practical', 'curious', 'reliable']
-
-// Connection Purposes
-['friendship', 'dating', 'networking', 'activities']
-
-// Days
-['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-
-// Time Preferences
-['morning', 'afternoon', 'evening', 'night']
+```json
+{
+  "status": "error",
+  "message": "Service degraded",
+  ...
+}
 ```
+
+#### Special Error Code: `ERRORCONNECT` / `NETWORK_UNAVAILABLE`
+
+If the server encounters a network error (e.g., MongoDB is unreachable), it will respond with:
+
+- `statusCode`: 503
+- `status`: "error"
+- `message`: "Network connection error. Please check your internet connection and try again."
+- `code`: `NETWORK_UNAVAILABLE` (if present)
+
+**Client engineers should:**
+- Detect 503 errors and the above message/code.
+- Show a user-friendly message (e.g., "We are having trouble connecting. Please try again later.").
+- Optionally, implement retry logic or offline handling.
+
+---
+
+## CORS
+
+Allowed origins:
+- `http://localhost:8080`
+- `http://localhost:3000`
+- `https://circlemate-spark-landing-mbh1.vercel.app`
+- `https://www.mycirclemate.com`
+- Value of `FRONTEND_URL` in environment
+
+---
+
+## Notes
+
+- All endpoints are available under both `/api/v1/` and legacy `/api/` paths for backward compatibility.
+- Use the `x-request-id` header in requests for traceability (optional, auto-generated if not provided).
+- All requests and responses are JSON unless otherwise specified.
+
+---
