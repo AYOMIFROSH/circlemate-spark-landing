@@ -10,25 +10,21 @@ const userProfileSchema = new mongoose.Schema({
     // Basic Info (from profile step)
     firstName: {
         type: String,
-        required: [true, 'First name is required'],
         trim: true,
         maxlength: 50
     },
     lastName: {
         type: String,
-        required: [true, 'Last name is required'],
         trim: true,
         maxlength: 50
     },
     age: {
         type: Number,
-        required: [true, 'Age is required'],
         min: [18, 'Must be at least 18 years old'],
         max: [120, 'Age must be realistic']
     },
     gender: {
         type: String,
-        required: true,
         enum: ['male', 'female', 'other', 'prefer-not-to-say']
     },
     bio: {
@@ -44,22 +40,18 @@ const userProfileSchema = new mongoose.Schema({
     // NEW FIELDS FROM FRONTEND
     temperament: {
         type: String,
-        required: true,
         enum: ['choleric', 'sanguine', 'phlegmatic', 'melancholic']
     },
     matchingStyle: {
         type: String,
-        required: true,
         enum: ['flexible', 'strict', 'auto']
     },
     ageRange: {
         type: String,
-        required: true,
         enum: ['18-25', '26-35', '36-45', '46+']
     },
     educationLevel: {
         type: String,
-        required: true,
         enum: [
             'no_formal',
             'primary',
@@ -78,22 +70,18 @@ const userProfileSchema = new mongoose.Schema({
     location: {
         city: {
             type: String,
-            required: [true, 'City is required'],
             trim: true
         },
         state: {
             type: String,
-            required: [true, 'State is required'],
             trim: true
         },
         country: {
             type: String,
-            required: [true, 'Country is required'],
             trim: true
         },
         postalCode: {
             type: String,
-            required: [true, 'Postal code is required'],
             trim: true
         },
         coordinates: {
