@@ -196,7 +196,7 @@ const WaitlistDashboard: React.FC = () => {
         <CardContent>
           {isSlowNetwork && loading && (
             <div className="flex items-center justify-center py-2">
-              <span className="text-yellow-600 font-medium">Your network is slow...</span>
+              <span className="text-yellow-600 font-medium">Loading is taking longer thank usual, Check your internet connection</span>
             </div>
           )}
           {loading ? (

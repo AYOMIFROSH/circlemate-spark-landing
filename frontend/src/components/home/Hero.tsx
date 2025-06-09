@@ -6,7 +6,7 @@ import WaitlistModal from './WaitlistModal';
 const Hero: React.FC = () => {
   const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
   return (
-    <section className="pt-8 pb-8 md:pt-19.5 md:pb-24 w-full overflow-x-hidden bg-white">
+    <section className="pt-12 pb-12 md:pt-19.5 md:pb-24 w-full overflow-x-hidden bg-white">
       <div className="container-custom mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col-reverse md:grid md:grid-cols-2 gap-10 items-center w-full">
           <div className="order-2 md:order-1 w-full">
@@ -30,8 +30,8 @@ const Hero: React.FC = () => {
             </div>
           </div>
           <div className="order-1 md:order-2 relative w-full flex justify-center md:block overflow-visible">
-            <div className="absolute -top-15 -left-20 w-64 h-64 bg-teal/20 rounded-full blur-3xl pointer-events-none max-w-full max-h-full" style={{maxWidth:'100vw',maxHeight:'64vh'}}></div>
-            <div className="absolute -bottom-15 -right-20 w-64 h-64 bg-orange/20 rounded-full blur-3xl pointer-events-none max-w-full max-h-full" style={{maxWidth:'100vw',maxHeight:'64vh'}}></div>
+            <div className="absolute -top-20 -left-20 w-64 h-64 bg-teal/20 rounded-full blur-3xl pointer-events-none max-w-full max-h-full" style={{maxWidth:'100vw',maxHeight:'64vh'}}></div>
+            <div className="absolute -bottom-19 -right-20 w-64 h-64 bg-orange/20 rounded-full blur-3xl pointer-events-none max-w-full max-h-full" style={{maxWidth:'100vw',maxHeight:'64vh'}}></div>
             
             <div className="relative z-10 rounded-2xl bg-white p-5 shadow-lg border border-gray-100">
               <div className="bg-cream rounded-lg p-4 mb-4">
