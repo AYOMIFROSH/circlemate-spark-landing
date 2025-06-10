@@ -99,7 +99,7 @@ createTransporter();
 
 // Enhanced session token generation with crypto.randomBytes
 const generateSessionToken = () => {
-    return crypto.randomBytes(32).toString('base64url');
+  return crypto.randomUUID(); // Faster and guaranteed unique
 };
 
 // Enhanced session creation with transaction support

@@ -418,6 +418,7 @@ const connectWithRetry = async () => {
         autoIndex: true,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
+        maxPoolSize: 50 // or 100 for more headroom
     };
 
     while (retries < maxRetries) {

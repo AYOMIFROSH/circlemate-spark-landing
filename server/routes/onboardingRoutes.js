@@ -1,6 +1,6 @@
 const express = require('express');
 const onboardingController = require('../controllers/onboardingController');
-const { authenticate, userBasedRateLimit } = require('./middleware');
+const { authenticate, userBasedRateLimit, cacheResponse } = require('./middleware');
 const { 
     validateCommunitySelection,
     validateProfileUpdate,
@@ -19,10 +19,10 @@ router.use(authenticate);
 router.use(userBasedRateLimit(100, 60000)); // 100 requests per minute
 
 // Get onboarding status - Always accessible
-router.get('/status', onboardingController.getOnboardingStatus);
+router.get('/status', cacheResponse(3600), onboardingController.getOnboardingStatus);
 
 // Get available communities - Always accessible
-router.get('/communities', onboardingController.getCommunities);
+router.get('/communities', cacheResponse(3600), onboardingController.getCommunities);
 
 // Each route is independent - order doesn't matter
 // Users can complete these in any order they prefer
@@ -110,7 +110,7 @@ router.post('/skip', async (req, res, next) => {
 });
 
 // Get progress summary
-router.get('/progress', async (req, res, next) => {
+router.get('/progress', cacheResponse(3600), async (req, res, next) => {
     try {
         const userId = req.user._id;
         const profile = await UserProfile.findOne({ userId }).lean();

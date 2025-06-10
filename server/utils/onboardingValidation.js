@@ -10,7 +10,15 @@ const schemas = {
     profileUpdate: Joi.object({
         firstName: Joi.string().min(2).max(50).required(),
         lastName: Joi.string().min(2).max(50).required(),
-        age: Joi.number().integer().min(18).max(120).required(),
+        age: Joi.number()
+            .integer()
+            .min(18)
+            .max(120)
+            .required()
+            .messages({
+                'number.min': 'You must be at least 18 years old to use CircleMate',
+                'number.max': 'Please enter a valid age'
+            }), 
         gender: Joi.string().valid('male', 'female').required(),
         bio: Joi.string().max(500).allow(''),
         occupation: Joi.string().max(200).allow(''),
@@ -83,7 +91,7 @@ const schemas = {
     availability: Joi.object({
         days: Joi.array()
             .items(Joi.string().valid(
-                'Monday', 'Tuesday', 'Wednesday', 'Thursday', 
+                'Monday', 'Tuesday', 'Wednesday', 'Thursday',
                 'Friday', 'Saturday', 'Sunday'
             ))
             .min(1)
@@ -106,7 +114,7 @@ const validate = (schema) => {
                 field: detail.path.join('.'),
                 message: detail.message
             }));
-            
+
             return res.status(400).json({
                 status: 'FAILED',
                 message: 'Validation failed',
