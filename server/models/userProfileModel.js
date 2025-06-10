@@ -106,7 +106,7 @@ const userProfileSchema = new mongoose.Schema({
     // NEW: Age preferences for each connection purpose
     connectionAgePreferences: {
         type: Map,
-        of: {
+        of: new mongoose.Schema({
             min: {
                 type: Number,
                 min: 18,
@@ -117,7 +117,7 @@ const userProfileSchema = new mongoose.Schema({
                 min: 18,
                 max: 100
             }
-        }
+        }, { _id: false })
     },
     interests: [{
         type: String,
