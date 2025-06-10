@@ -442,22 +442,17 @@ Allowed origins:
 
 ```json
 {
-  "community": {
-    "communityId": "60f7c2b8e1b1c8a1b8e1b1c8",
-    "inviteCode": "CIRCLE2025"
-  },
-  "profile": {
-    "firstName": "Ada",
-    "lastName": "Lovelace",
-    "age": 28,
-    "gender": "female",
-    "bio": "Software engineer and AI enthusiast.",
-    "occupation": "AI Researcher",
-    "temperament": "analytical",
-    "matchingStyle": "flexible",
-    "ageRange": "26-35",
-    "educationLevel": "master"
-  },
+  "userId": "60f7c2b8e1b1c8a1b8e1b1c8",
+  "firstName": "Ada",
+  "lastName": "Lovelace",
+  "age": 28,
+  "gender": "female",
+  "bio": "Software engineer and AI enthusiast.",
+  "occupation": "AI Researcher",
+  "temperament": "analytical",
+  "matchingStyle": "flexible",
+  "ageRange": "26-35",
+  "educationLevel": "master",
   "location": {
     "city": "London",
     "state": "Greater London",
@@ -465,22 +460,18 @@ Allowed origins:
     "postalCode": "SW1A 1AA",
     "coordinates": { "latitude": 51.5014, "longitude": -0.1419 }
   },
-  "personality": {
-    "personalityTraits": ["analytical", "creative", "reliable"]
+  "personalityTraits": ["analytical", "creative", "reliable"],
+  "connectionPurposes": ["friendship", "networking"],
+  "connectionAgePreferences": {
+    "friendship": { "min": 25, "max": 35 },
+    "networking": { "min": 22, "max": 40 }
   },
-  "preferences": {
-    "connectionPurposes": ["friendship", "networking"],
-    "interests": ["AI", "Machine Learning", "Music"],
-    "preferredAges": {
-      "friendship": { "min": 25, "max": 35 },
-      "networking": { "min": 22, "max": 40 }
-    }
-  },
+  "interests": ["AI", "Machine Learning", "Music"],
   "availability": {
     "days": ["Monday", "Wednesday", "Friday"],
     "timePreferences": ["evening", "night"]
   },
-  "photos": [
+  "profilePhotos": [
     {
       "url": "https://res.cloudinary.com/demo/image/upload/v1620000000/profile1.jpg",
       "isPrimary": true
@@ -489,8 +480,18 @@ Allowed origins:
       "url": "https://res.cloudinary.com/demo/image/upload/v1620000000/profile2.jpg",
       "isPrimary": false
     }
-  ]
+  ],
+  "communities": [
+    {
+      "communityId": "60f7c2b8e1b1c8a1b8e1b1c8",
+      "joinedAt": "2025-06-10T12:00:00.000Z",
+      "role": "member"
+    }
+  ],
+  "onboardingStep": 7,
+  "onboardingCompleted": true
 }
+
 ```
 
 - This example covers all onboarding steps and fields.
