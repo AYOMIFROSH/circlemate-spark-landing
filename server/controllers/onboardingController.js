@@ -363,7 +363,8 @@ exports.updatePersonality = async (req, res, next) => {
 exports.updatePreferences = async (req, res, next) => {
     try {
         const userId = req.user._id;
-        const { connectionPurposes, interests, preferredAges } = req.body;
+        // Use connectionAgePreferences instead of preferredAges
+        const { connectionPurposes, interests, connectionAgePreferences } = req.body;
 
         // Validation for this route only
         if (!connectionPurposes || !Array.isArray(connectionPurposes) || connectionPurposes.length === 0) {
@@ -382,10 +383,9 @@ exports.updatePreferences = async (req, res, next) => {
         profile.interests = interests.map(interest => DOMPurify.sanitize(interest));
         
         // Update age preferences if provided
-        if (preferredAges && typeof preferredAges === 'object') {
+        if (connectionAgePreferences && typeof connectionAgePreferences === 'object') {
             profile.connectionAgePreferences = new Map();
-            
-            for (const [purpose, ageRange] of Object.entries(preferredAges)) {
+            for (const [purpose, ageRange] of Object.entries(connectionAgePreferences)) {
                 if (connectionPurposes.includes(purpose) && ageRange.min && ageRange.max) {
                     profile.connectionAgePreferences.set(purpose, {
                         min: parseInt(ageRange.min),
@@ -409,11 +409,10 @@ exports.updatePreferences = async (req, res, next) => {
                 connectionPurposes: profile.connectionPurposes,
                 interests: profile.interests,
                 connectionAgePreferences: Object.fromEntries(profile.connectionAgePreferences || new Map()),
-                onboardingStep: profile.onboardingStep
             }
         });
     } catch (error) {
-        logger.error('Preferences update error:', error);
+        logger.error('Error updating preferences:', error);
         next(error);
     }
 };
