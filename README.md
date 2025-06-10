@@ -437,3 +437,64 @@ Allowed origins:
 - All requests and responses are JSON unless otherwise specified.
 
 ---
+
+## Example Onboarding Data (for Frontend & AI Engineers)
+
+```json
+{
+  "community": {
+    "communityId": "60f7c2b8e1b1c8a1b8e1b1c8",
+    "inviteCode": "CIRCLE2025"
+  },
+  "profile": {
+    "firstName": "Ada",
+    "lastName": "Lovelace",
+    "age": 28,
+    "gender": "female",
+    "bio": "Software engineer and AI enthusiast.",
+    "occupation": "AI Researcher",
+    "temperament": "analytical",
+    "matchingStyle": "flexible",
+    "ageRange": "26-35",
+    "educationLevel": "master"
+  },
+  "location": {
+    "city": "London",
+    "state": "Greater London",
+    "country": "UK",
+    "postalCode": "SW1A 1AA",
+    "coordinates": { "latitude": 51.5014, "longitude": -0.1419 }
+  },
+  "personality": {
+    "personalityTraits": ["analytical", "creative", "reliable"]
+  },
+  "preferences": {
+    "connectionPurposes": ["friendship", "networking"],
+    "interests": ["AI", "Machine Learning", "Music"],
+    "preferredAges": {
+      "friendship": { "min": 25, "max": 35 },
+      "networking": { "min": 22, "max": 40 }
+    }
+  },
+  "availability": {
+    "days": ["Monday", "Wednesday", "Friday"],
+    "timePreferences": ["evening", "night"]
+  },
+  "photos": [
+    {
+      "url": "https://res.cloudinary.com/demo/image/upload/v1620000000/profile1.jpg",
+      "isPrimary": true
+    },
+    {
+      "url": "https://res.cloudinary.com/demo/image/upload/v1620000000/profile2.jpg",
+      "isPrimary": false
+    }
+  ]
+}
+```
+
+- This example covers all onboarding steps and fields.
+- Use this as a reference for frontend payloads and for AI/data engineers to understand the user profile structure.
+- Adjust field values as needed for your use case.
+
+---
