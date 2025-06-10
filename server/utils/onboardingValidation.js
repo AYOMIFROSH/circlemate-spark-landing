@@ -71,8 +71,8 @@ const schemas = {
             .items(Joi.string().trim())
             .min(1)
             .required(),
-        // NEW: Age preferences for each connection purpose
-        preferredAges: Joi.object().pattern(
+        // Accept connectionAgePreferences instead of preferredAges
+        connectionAgePreferences: Joi.object().pattern(
             Joi.string().valid('friendship', 'dating', 'networking', 'activities'),
             Joi.object({
                 min: Joi.number().integer().min(18).max(100).required(),
