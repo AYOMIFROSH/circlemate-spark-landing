@@ -46,8 +46,18 @@ const schemas = {
         state: Joi.string().min(2).required(),
         country: Joi.string().min(2).required(),
         postalCode: Joi.string().min(3).required(),
-        latitude: Joi.number().min(-90).max(90).optional(),
-        longitude: Joi.number().min(-180).max(180).optional()
+        latitude: Joi.number().min(-90).max(90).required().messages({
+            'any.required': 'Latitude is required',
+            'number.base': 'Latitude must be a number',
+            'number.min': 'Latitude must be between -90 and 90',
+            'number.max': 'Latitude must be between -90 and 90'
+        }),
+        longitude: Joi.number().min(-180).max(180).required().messages({
+            'any.required': 'Longitude is required',
+            'number.base': 'Longitude must be a number',
+            'number.min': 'Longitude must be between -180 and 180',
+            'number.max': 'Longitude must be between -180 and 180'
+        })
     }),
 
     personality: Joi.object({
