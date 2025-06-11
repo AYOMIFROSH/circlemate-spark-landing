@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const onboardingController = require('../controllers/onboardingController');
 const { authenticate, userBasedRateLimit, cacheResponse } = require('./middleware');
 const { 
