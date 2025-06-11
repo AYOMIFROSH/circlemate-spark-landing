@@ -17,10 +17,10 @@ const logger = require('./utils/logger');
 const onboardingRouter = require('./routes/onboardingRoutes');
 const waitlistRouter = require('./routes/waitListRoutes');
 const importCsvRouter = require("./models/importCsv");
-const { 
-    networkCheck, 
+const {
+    networkCheck,
     mongooseNetworkErrorHandler,
-    emailNetworkErrorHandler 
+    emailNetworkErrorHandler
 } = require('./utils/networkMiddleware');
 
 const app = express();
@@ -70,7 +70,7 @@ app.use(helmet({
 app.use(securityHeaders);
 
 // Request logging
-app.use(morgan('combined', { 
+app.use(morgan('combined', {
     stream: logger.stream,
     skip: (req) => req.url === '/health' || req.url === '/api/health'
 }));
@@ -122,10 +122,10 @@ const corsOptions = {
             'http://localhost:3000',
             process.env.FRONTEND_URL
         ].filter(Boolean);
-        
+
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        
+
         if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
@@ -211,7 +211,7 @@ app.get('/api/verified', verifiedPage);
 // Apply auth rate limiting to auth routes
 app.use('/api/auth', authLimiter);
 
-app.use("/api", importCsvRouter); 
+app.use("/api", importCsvRouter);
 
 // API versioning
 const API_VERSION = 'v1';
@@ -308,9 +308,9 @@ app.use((err, req, res, next) => {
 
     // Set CORS headers for error responses
     const allowedOrigins = [
-        'https://circlemate-spark-landing-mbh1.vercel.app', 
-        'http://localhost:8080', 
-        'http://localhost:3000', 
+        'https://circlemate-spark-landing-mbh1.vercel.app',
+        'http://localhost:8080',
+        'http://localhost:3000',
         'https://www.mycirclemate.com'
     ];
     const origin = req.headers.origin;
@@ -373,9 +373,9 @@ app.use((err, req, res, next) => {
         status: err.status,
         message: err.message,
         requestId: req.id,
-        ...(isDevelopment && { 
+        ...(isDevelopment && {
             stack: err.stack,
-            error: err 
+            error: err
         })
     });
 });
@@ -385,7 +385,7 @@ let server;
 
 const gracefulShutdown = async (signal) => {
     logger.info(`${signal} received. Starting graceful shutdown...`);
-    
+
     if (server) {
         server.close(() => {
             logger.info('HTTP server closed');
@@ -424,31 +424,35 @@ process.on('uncaughtException', (error) => {
 const connectWithRetry = async () => {
     const maxRetries = 5;
     let retries = 0;
-    
+
+    // In your existing connectWithRetry function, just update the mongoOptions:
     const mongoOptions = {
         autoIndex: true,
         serverSelectionTimeoutMS: 5000,
         socketTimeoutMS: 45000,
-        maxPoolSize: 50 // or 100 for more headroom
+        maxPoolSize: 10,
+        minPoolSize: 1,
+        maxIdleTimeMS: 30000,
+        family: 4
     };
 
     while (retries < maxRetries) {
         try {
             await mongoose.connect(dbAltHost, mongoOptions);
             logger.info('MongoDB connected successfully');
-            
+
             // Setup network error handler for mongoose
             mongooseNetworkErrorHandler(mongoose);
-            
+
             break;
         } catch (err) {
             retries++;
             logger.error(`MongoDB connection attempt ${retries} failed:`, err);
-            
+
             if (retries === maxRetries) {
                 throw err;
             }
-            
+
             logger.info(`Retrying in 5 seconds... (${maxRetries - retries} attempts remaining)`);
             await new Promise(resolve => setTimeout(resolve, 5000));
         }
@@ -459,7 +463,7 @@ const connectWithRetry = async () => {
 const startServer = async () => {
     try {
         logger.info('Starting application...');
-        
+
         // Connect to database with retry
         await connectWithRetry();
 
@@ -479,7 +483,7 @@ const startServer = async () => {
         // Start cleanup job for expired sessions
         const Session = require('./models/sessionModel');
         const User = require('./models/userModel');
-        
+
         // Session cleanup job
         setInterval(async () => {
             try {
