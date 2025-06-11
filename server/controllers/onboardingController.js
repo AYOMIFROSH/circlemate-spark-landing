@@ -291,8 +291,11 @@ exports.updateLocation = async (req, res, next) => {
             country: DOMPurify.sanitize(country),
             postalCode: DOMPurify.sanitize(postalCode),
             coordinates: {
-                latitude: latitude ? parseFloat(latitude) : null,
-                longitude: longitude ? parseFloat(longitude) : null
+                type: 'Point',
+                coordinates: [
+                    longitude ? parseFloat(longitude) : 0,
+                    latitude ? parseFloat(latitude) : 0
+                ]
             }
         };
 

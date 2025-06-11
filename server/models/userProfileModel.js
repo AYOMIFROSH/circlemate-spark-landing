@@ -85,8 +85,17 @@ const userProfileSchema = new mongoose.Schema({
             trim: true
         },
         coordinates: {
-            latitude: Number,
-            longitude: Number
+            type: {
+                type: String,
+                enum: ['Point'],
+                default: 'Point',
+                required: true
+            },
+            coordinates: {
+                type: [Number], // [longitude, latitude]
+                required: true,
+                default: [0, 0]
+            }
         }
     },
     // Personality Traits (from personality step)
@@ -101,7 +110,8 @@ const userProfileSchema = new mongoose.Schema({
     // Connection Preferences (from preferences step)
     connectionPurposes: [{
         type: String,
-        enum: ['friendship', 'dating', 'networking', 'activities']
+        enum: ['friendship', 'dating', 'networking', 'activities'
+        ]
     }],
     // NEW: Age preferences for each connection purpose
     connectionAgePreferences: {
