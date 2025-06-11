@@ -147,8 +147,7 @@ All onboarding routes require authentication via `Authorization: Bearer <token>`
 - **Body:**
   ```json
   {
-    "communityName": "string",
-    "interests": ["string", ...]
+    "communityId": "string" // or "inviteCode": "string"
   }
   ```
 - **Response:** Community selection saved.
@@ -158,10 +157,16 @@ All onboarding routes require authentication via `Authorization: Bearer <token>`
 - **Body:**
   ```json
   {
-    "firstName": "string",
-    "lastName": "string",
-    "bio": "string",
-    // ...other profile fields
+    "firstName": "Ada",
+    "lastName": "Lovelace",
+    "age": 28,
+    "gender": "female",
+    "bio": "Software engineer and AI enthusiast.",
+    "occupation": "AI Researcher",
+    "temperament": "analytical",
+    "matchingStyle": "flexible",
+    "ageRange": "26-35",
+    "educationLevel": "master"
   }
   ```
 - **Response:** Profile info saved.
@@ -171,7 +176,7 @@ All onboarding routes require authentication via `Authorization: Bearer <token>`
 - **Body:**
   ```json
   {
-    "<field>": "value"
+    "bio": "Updated bio text."
   }
   ```
 - **Response:** Single profile field updated.
@@ -181,9 +186,12 @@ All onboarding routes require authentication via `Authorization: Bearer <token>`
 - **Body:**
   ```json
   {
-    "city": "string",
-    "country": "string",
-    // ...other location fields
+    "city": "London",
+    "state": "Greater London",
+    "country": "UK",
+    "postalCode": "SW1A 1AA",
+    "latitude": 51.5014,
+    "longitude": -0.1419
   }
   ```
 - **Response:** Location info saved.
@@ -193,7 +201,7 @@ All onboarding routes require authentication via `Authorization: Bearer <token>`
 - **Body:**
   ```json
   {
-    "personalityTraits": ["string", ...]
+    "personalityTraits": ["analytical", "creative", "reliable"]
   }
   ```
 - **Response:** Personality info saved.
@@ -203,7 +211,12 @@ All onboarding routes require authentication via `Authorization: Bearer <token>`
 - **Body:**
   ```json
   {
-    "connectionPurposes": ["string", ...]
+    "connectionPurposes": ["friendship", "networking"],
+    "interests": ["AI", "Machine Learning", "Music"],
+    "connectionAgePreferences": {
+      "friendship": { "min": 25, "max": 35 },
+      "networking": { "min": 22, "max": 40 }
+    }
   }
   ```
 - **Response:** Preferences saved.
@@ -213,8 +226,8 @@ All onboarding routes require authentication via `Authorization: Bearer <token>`
 - **Body:**
   ```json
   {
-    "days": ["Monday", "Tuesday", ...],
-    "times": ["Morning", "Evening", ...]
+    "days": ["Monday", "Wednesday", "Friday"],
+    "timePreferences": ["evening", "night"]
   }
   ```
 - **Response:** Availability saved.
