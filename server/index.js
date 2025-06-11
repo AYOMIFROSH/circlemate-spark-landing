@@ -72,8 +72,13 @@ app.use(securityHeaders);
 // Request logging
 app.use(morgan('combined', {
     stream: logger.stream,
-    skip: (req) => req.url === '/health' || req.url === '/api/health'
+    skip: (req) => {
+        // Skip logging for all health check endpoints
+        const healthPaths = ['/health', '/api/health', '/health/strict'];
+        return healthPaths.includes(req.url) || req.url.startsWith('/health');
+    }
 }));
+
 app.use(requestLogger);
 
 // Network connectivity check middleware
@@ -178,7 +183,7 @@ app.get('/', (req, res) => {
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Detailed health check
+// Replace your existing health check with this improved version
 app.get('/health', async (req, res) => {
     const healthcheck = {
         uptime: process.uptime(),
@@ -187,19 +192,97 @@ app.get('/health', async (req, res) => {
         environment: process.env.NODE_ENV || 'development',
         requestId: req.id,
         checks: {
-            database: 'pending',
+            database: 'checking',
+            memory: process.memoryUsage(),
+            network: 'connected',
+            connectionState: mongoose.connection.readyState
+        }
+    };
+
+    try {
+        // Check connection state first (fast check)
+        const connectionState = mongoose.connection.readyState;
+        
+        if (connectionState === 1) {
+            // Connected - do a quick ping with timeout
+            const pingPromise = mongoose.connection.db.admin().ping();
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Database ping timeout')), 8000)
+            );
+            
+            await Promise.race([pingPromise, timeoutPromise]);
+            healthcheck.checks.database = 'connected';
+            healthcheck.message = 'OK';
+            
+        } else if (connectionState === 2) {
+            // Currently connecting
+            healthcheck.checks.database = 'connecting';
+            healthcheck.message = 'Database connecting (cold start)';
+            
+        } else if (connectionState === 0) {
+            // Disconnected - this might be a cold start
+            healthcheck.checks.database = 'disconnected';
+            healthcheck.message = 'Database disconnected (cold start expected)';
+            
+        } else {
+            // Other states (3 = disconnecting)
+            healthcheck.checks.database = 'unknown';
+            healthcheck.message = 'Database in transition';
+        }
+        
+        // Always return 200 for basic health check - let monitoring decide what's unhealthy
+        res.status(200).json(healthcheck);
+        
+    } catch (error) {
+        // Even on database errors, return 200 but indicate the issue
+        healthcheck.checks.database = 'error';
+        healthcheck.message = `Database error: ${error.message}`;
+        
+        // Log the error for debugging
+        logger.warn('Health check database error:', {
+            error: error.message,
+            connectionState: mongoose.connection.readyState,
+            requestId: req.id
+        });
+        
+        res.status(200).json(healthcheck);
+    }
+});
+
+// Optional: Add a stricter health check for critical monitoring
+app.get('/health/strict', async (req, res) => {
+    const healthcheck = {
+        uptime: process.uptime(),
+        message: 'OK',
+        timestamp: Date.now(),
+        environment: process.env.NODE_ENV || 'development',
+        requestId: req.id,
+        checks: {
+            database: 'checking',
             memory: process.memoryUsage(),
             network: 'connected'
         }
     };
 
     try {
-        // Check database connection
-        await mongoose.connection.db.admin().ping();
+        // Strict check - must be connected and responsive
+        if (mongoose.connection.readyState !== 1) {
+            throw new Error('Database not connected');
+        }
+        
+        // Ping with shorter timeout for strict check
+        const pingPromise = mongoose.connection.db.admin().ping();
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Database ping timeout')), 3000)
+        );
+        
+        await Promise.race([pingPromise, timeoutPromise]);
+        
         healthcheck.checks.database = 'connected';
         res.status(200).json(healthcheck);
+        
     } catch (error) {
-        healthcheck.checks.database = 'disconnected';
+        healthcheck.checks.database = 'failed';
         healthcheck.message = 'Service degraded';
         res.status(503).json(healthcheck);
     }
