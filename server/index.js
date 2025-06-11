@@ -253,9 +253,20 @@ app.get('/api/docs', (req, res) => {
             },
             onboarding: {
                 status: `GET /api/${API_VERSION}/onboarding/status`,
+                communities: `GET /api/${API_VERSION}/onboarding/communities`,
                 community: `POST /api/${API_VERSION}/onboarding/community`,
                 profile: `POST /api/${API_VERSION}/onboarding/profile`,
-                complete: `POST /api/${API_VERSION}/onboarding/complete`
+                location: `POST /api/${API_VERSION}/onboarding/location`,
+                personality: `POST /api/${API_VERSION}/onboarding/personality`,
+                preferences: `POST /api/${API_VERSION}/onboarding/preferences`,
+                availability: `POST /api/${API_VERSION}/onboarding/availability`,
+                photos: `POST /api/${API_VERSION}/onboarding/photos`,
+                deletePhoto: `DELETE /api/${API_VERSION}/onboarding/photos/:photoId`,
+                complete: `POST /api/${API_VERSION}/onboarding/complete`,
+                skip: `POST /api/${API_VERSION}/onboarding/skip`,
+                progress: `GET /api/${API_VERSION}/onboarding/progress`,
+                bulkUpdate: `POST /api/${API_VERSION}/onboarding/bulk-update`,
+                patchProfileField: `PATCH /api/${API_VERSION}/onboarding/profile/:field`
             }
         }
     });
