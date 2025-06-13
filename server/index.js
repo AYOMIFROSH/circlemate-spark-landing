@@ -122,7 +122,7 @@ const corsOptions = {
     origin: function (origin, callback) {
         const allowedOrigins = [
             'http://localhost:8080',
-            'https://circlemate-spark-landing-mbh1.vercel.app', // <-- frontend
+            'https://circlemate-spark-landing2.vercel.app', // <-- frontend
             'https://www.mycirclemate.com',
             'http://localhost:3000',
             process.env.FRONTEND_URL

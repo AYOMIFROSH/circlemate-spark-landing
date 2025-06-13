@@ -20,3 +20,40 @@
 {"level":"info","message":"Process ID: 10300","timestamp":"2025-06-11 18:28:17"}
 {"level":"info","message":"API Version: v1","timestamp":"2025-06-11 18:28:17"}
 {"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-11 18:28:42"}
+{"level":"info","message":"Cloudinary configured successfully","timestamp":"2025-06-11 18:51:17"}
+{"level":"info","message":"Starting application...","timestamp":"2025-06-11 18:51:17"}
+{"level":"info","message":"Email server is ready","timestamp":"2025-06-11 18:51:19"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-06-11 18:51:25"}
+{"level":"info","message":"Server running on port 3000","timestamp":"2025-06-11 18:51:25"}
+{"level":"info","message":"Environment: development","timestamp":"2025-06-11 18:51:25"}
+{"level":"info","message":"Database: Connected to test","timestamp":"2025-06-11 18:51:25"}
+{"level":"info","message":"Process ID: 15700","timestamp":"2025-06-11 18:51:25"}
+{"level":"info","message":"API Version: v1","timestamp":"2025-06-11 18:51:25"}
+{"duration":"50ms","ip":"::1","level":"info","message":"Request completed:","method":"GET","requestId":"8dfc7fb1-1168-44ce-aa4b-26212d9d0eb5","status":200,"timestamp":"2025-06-11 18:51:38","url":"/api/docs","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+{"level":"warn","message":"404 - Route not found: /api/health/strict, Request ID: 4233be6b-08d2-4487-a22e-fa5f91b68693","timestamp":"2025-06-11 18:51:50"}
+{"duration":"6ms","ip":"::1","level":"error","message":"Request failed:","method":"GET","requestId":"4233be6b-08d2-4487-a22e-fa5f91b68693","status":404,"timestamp":"2025-06-11 18:51:50","url":"/api/health/strict","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+{"duration":"237ms","ip":"::1","level":"info","message":"Request completed:","method":"GET","requestId":"384c2f8a-d6d8-4248-b3c1-a2a8797dda54","status":200,"timestamp":"2025-06-11 18:52:15","url":"/health/strict","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+{"duration":"962ms","ip":"::1","level":"info","message":"Request completed:","method":"GET","requestId":"fb55a04a-eb2f-4a57-aff9-b11aca19fe68","status":200,"timestamp":"2025-06-11 18:52:30","url":"/health","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+{"duration":"173ms","ip":"::1","level":"info","message":"Request completed:","method":"GET","requestId":"e53ad705-1090-4732-80f0-aa0218ecff9b","status":200,"timestamp":"2025-06-11 18:52:33","url":"/health","user":"anonymous","userAgent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36"}
+{"level":"info","message":"SIGINT received. Starting graceful shutdown...","timestamp":"2025-06-11 18:52:43"}
+{"level":"info","message":"Cloudinary configured successfully","timestamp":"2025-06-12 13:10:41"}
+{"level":"info","message":"Starting application...","timestamp":"2025-06-12 13:10:41"}
+{"code":"EDNS","command":"CONN","errno":-3008,"hostname":"smtp.gmail.com","level":"error","message":"Email transporter error: getaddrinfo ENOTFOUND smtp.gmail.com","stack":"Error: getaddrinfo ENOTFOUND smtp.gmail.com\n    at GetAddrInfoReqWrap.onlookupall [as oncomplete] (node:dns:122:26)","syscall":"getaddrinfo","timestamp":"2025-06-12 13:10:42"}
+{"code":"ECONNREFUSED","hostname":"_mongodb._tcp.circlemateserver.zoyjna7.mongodb.net","level":"error","message":"MongoDB connection attempt 1 failed: querySrv ECONNREFUSED _mongodb._tcp.circlemateserver.zoyjna7.mongodb.net","stack":"Error: querySrv ECONNREFUSED _mongodb._tcp.circlemateserver.zoyjna7.mongodb.net\n    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:294:17)","syscall":"querySrv","timestamp":"2025-06-12 13:10:42"}
+{"level":"info","message":"Retrying in 5 seconds... (4 attempts remaining)","timestamp":"2025-06-12 13:10:42"}
+{"code":"ECONNREFUSED","hostname":"_mongodb._tcp.circlemateserver.zoyjna7.mongodb.net","level":"error","message":"MongoDB connection attempt 2 failed: querySrv ECONNREFUSED _mongodb._tcp.circlemateserver.zoyjna7.mongodb.net","stack":"Error: querySrv ECONNREFUSED _mongodb._tcp.circlemateserver.zoyjna7.mongodb.net\n    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:294:17)","syscall":"querySrv","timestamp":"2025-06-12 13:10:47"}
+{"level":"info","message":"Retrying in 5 seconds... (3 attempts remaining)","timestamp":"2025-06-12 13:10:47"}
+{"code":"ECONNREFUSED","hostname":"_mongodb._tcp.circlemateserver.zoyjna7.mongodb.net","level":"error","message":"MongoDB connection attempt 3 failed: querySrv ECONNREFUSED _mongodb._tcp.circlemateserver.zoyjna7.mongodb.net","stack":"Error: querySrv ECONNREFUSED _mongodb._tcp.circlemateserver.zoyjna7.mongodb.net\n    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:294:17)","syscall":"querySrv","timestamp":"2025-06-12 13:10:52"}
+{"level":"info","message":"Retrying in 5 seconds... (2 attempts remaining)","timestamp":"2025-06-12 13:10:52"}
+{"code":"ECONNREFUSED","hostname":"_mongodb._tcp.circlemateserver.zoyjna7.mongodb.net","level":"error","message":"MongoDB connection attempt 4 failed: querySrv ECONNREFUSED _mongodb._tcp.circlemateserver.zoyjna7.mongodb.net","stack":"Error: querySrv ECONNREFUSED _mongodb._tcp.circlemateserver.zoyjna7.mongodb.net\n    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:294:17)","syscall":"querySrv","timestamp":"2025-06-12 13:10:57"}
+{"level":"info","message":"Retrying in 5 seconds... (1 attempts remaining)","timestamp":"2025-06-12 13:10:57"}
+{"code":"ECONNREFUSED","hostname":"_mongodb._tcp.circlemateserver.zoyjna7.mongodb.net","level":"error","message":"MongoDB connection attempt 5 failed: querySrv ECONNREFUSED _mongodb._tcp.circlemateserver.zoyjna7.mongodb.net","stack":"Error: querySrv ECONNREFUSED _mongodb._tcp.circlemateserver.zoyjna7.mongodb.net\n    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:294:17)","syscall":"querySrv","timestamp":"2025-06-12 13:11:02"}
+{"level":"info","message":"Cloudinary configured successfully","timestamp":"2025-06-13 07:33:31"}
+{"level":"info","message":"Starting application...","timestamp":"2025-06-13 07:33:32"}
+{"level":"info","message":"Email server is ready","timestamp":"2025-06-13 07:33:34"}
+{"level":"info","message":"MongoDB connected successfully","timestamp":"2025-06-13 07:33:38"}
+{"level":"info","message":"Server running on port 3000","timestamp":"2025-06-13 07:33:38"}
+{"level":"info","message":"Environment: development","timestamp":"2025-06-13 07:33:38"}
+{"level":"info","message":"Database: Connected to test","timestamp":"2025-06-13 07:33:38"}
+{"level":"info","message":"Process ID: 6880","timestamp":"2025-06-13 07:33:38"}
+{"level":"info","message":"API Version: v1","timestamp":"2025-06-13 07:33:38"}
