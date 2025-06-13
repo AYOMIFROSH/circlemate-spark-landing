@@ -435,9 +435,7 @@ If the server encounters a network error (e.g., MongoDB is unreachable), it will
 ## CORS
 
 Allowed origins:
-- `http://localhost:8080`
-- `http://localhost:3000`
-- `https://circlemate-spark-landing-mbh1.vercel.app`
+- `https://circlemate-spark-landing2.vercel.app`
 - `https://www.mycirclemate.com`
 - Value of `FRONTEND_URL` in environment
 
